@@ -1,0 +1,11 @@
+services:
+  api-viera-laravel-novo:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: api-viera-laravel-novo
+    restart: unless-stopped
+    ports:
+      - "8011:8000"
+    volumes:
+      - ./.env:/var/www/html/.env:ro
