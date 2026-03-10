@@ -45,4 +45,4 @@ RUN composer install --no-dev --prefer-dist --no-interaction --optimize-autoload
 
 EXPOSE 8000
 
-CMD ["sh", "-lc", "php artisan package:discover --ansi && php artisan config:clear && php artisan route:clear && php artisan view:clear && php artisan serve --host=0.0.0.0 --port=8000"]
+CMD ["sh", "-lc", "php artisan package:discover --ansi && php artisan config:clear && php artisan route:clear && php artisan serve --host=0.0.0.0 --port=8000"]
