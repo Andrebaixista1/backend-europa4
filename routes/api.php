@@ -21,3 +21,4 @@ Route::get('/teste', function() {
 Route::post('/login', [AuthController::class, 'login']);
 Route::get('/usuarios', [ConsultasController::class, 'usuarios']);
 Route::get('/equipes', [ConsultasController::class, 'equipes']);
+Route::get('/permissoes', [ConsultasController::class, 'permissoes']);

@@ -41,8 +41,8 @@ COPY routes ./routes
 COPY tests ./tests
 COPY package.json package-lock.json vite.config.js phpunit.xml ./
 
-RUN composer install --no-dev --prefer-dist --no-interaction --optimize-autoloader
+RUN composer install --no-dev --prefer-dist --no-interaction --optimize-autoloader --no-scripts
 
 EXPOSE 8000
 
-CMD ["sh", "-lc", "php artisan config:clear && php artisan route:clear && php artisan view:clear && php artisan serve --host=0.0.0.0 --port=8000"]
+CMD ["sh", "-lc", "php artisan package:discover --ansi && php artisan config:clear && php artisan route:clear && php artisan view:clear && php artisan serve --host=0.0.0.0 --port=8000"]

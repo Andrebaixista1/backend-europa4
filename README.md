@@ -60,6 +60,19 @@ Resposta:
 }
 ```
 
+### `GET /api/permissoes`
+Lista permissoes vindas da tabela `[europa4].[dbo].[permissions45]`.
+
+Resposta:
+
+```json
+{
+  "success": true,
+  "total": 16,
+  "data": []
+}
+```
+
 ## Como rodar localmente
 
 Este projeto precisa de PHP com extensao `sqlsrv` e `pdo_sqlsrv`.
@@ -91,6 +104,13 @@ curl --location "http://127.0.0.1:8000/api/usuarios" \
 
 ```bash
 curl --location "http://127.0.0.1:8000/api/equipes" \
+--header "Accept: application/json"
+```
+
+### Testar permissoes
+
+```bash
+curl --location "http://127.0.0.1:8000/api/permissoes" \
 --header "Accept: application/json"
 ```
 
