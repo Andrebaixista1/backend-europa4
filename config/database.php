@@ -114,6 +114,36 @@ return [
             'trust_server_certificate' => env('DB_TRUST_SERVER_CERTIFICATE', true),
         ],
 
+        'sqlsrv2' => [
+            'driver' => 'sqlsrv',
+            'url' => env('DB_URL2'),
+            'host' => env('DB_HOST2', 'localhost'),
+            'port' => env('DB_PORT2', '1433'),
+            'database' => env('DB_DATABASE2', 'forge'),
+            'username' => env('DB_USERNAME2', 'forge'),
+            'password' => env('DB_PASSWORD2', ''),
+            'charset' => env('DB_CHARSET2', 'utf8'),
+            'prefix' => '',
+            'prefix_indexes' => true,
+            'encrypt' => env('DB_ENCRYPT2', 'yes'),
+            'trust_server_certificate' => env('DB_TRUST_SERVER_CERTIFICATE2', true),
+        ],
+
+        'sqlsrv3' => [
+            'driver' => 'sqlsrv',
+            'url' => env('DB_URL3'),
+            'host' => env('DB_HOST3', 'localhost'),
+            'port' => env('DB_PORT3', '1433'),
+            'database' => env('DB_DATABASE3', 'forge'),
+            'username' => env('DB_USERNAME3', 'forge'),
+            'password' => env('DB_PASSWORD3', ''),
+            'charset' => env('DB_CHARSET3', 'utf8'),
+            'prefix' => '',
+            'prefix_indexes' => true,
+            'encrypt' => env('DB_ENCRYPT3', 'yes'),
+            'trust_server_certificate' => env('DB_TRUST_SERVER_CERTIFICATE3', true),
+        ],
+
     ],
 
     /*

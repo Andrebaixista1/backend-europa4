@@ -208,5 +208,92 @@ class ConsultasController extends Controller
         }
     }
 
+    public function hostinger()
+    {
+        try {
+            $hostingerdb = DB::connection('sqlsrv')->select("
+                SELECT
+                    name,
+                    database_id,
+                    create_date,
+                    compatibility_level,
+                    state_desc
+                FROM sys.databases
+                ORDER BY name
+            ");
 
+            return response()->json([
+                'success' => true,
+                'total' => count($hostingerdb),
+                'data' => $hostingerdb
+            ], 200);
+
+        } catch (\Throwable $e){
+            return response()->json([
+                'success' => false,
+                'message' => 'Erro ao buscar banco de dados da conexão Hostinger',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    public function local()
+    {
+        try {
+            $localdb = DB::connection('sqlsrv2')->select("
+                SELECT
+                    name,
+                    database_id,
+                    create_date,
+                    compatibility_level,
+                    state_desc
+                FROM sys.databases
+                ORDER BY name
+            ");
+
+            return response()->json([
+                'success' => true,
+                'total' => count($localdb),
+                'data' => $localdb
+            ], 200);
+
+        } catch (\Throwable $e){
+            return response()->json([
+                'success' => false,
+                'message' => 'Erro ao buscar banco de dados da conexão Planejamento Local',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    public function kinghost()
+    {
+        try {
+            $kinghostdb = DB::connection('sqlsrv3')->select("
+                SELECT
+                    name,
+                    database_id,
+                    create_date,
+                    compatibility_level,
+                    state_desc
+                FROM sys.databases
+                ORDER BY name
+            ");
+
+            return response()->json([
+                'success' => true,
+                'total' => count($kinghostdb),
+                'data' => $kinghostdb
+            ], 200);
+
+        } catch (\Throwable $e){
+            return response()->json([
+                'success' => false,
+                'message' => 'Erro ao buscar banco de dados da conexão Kinghost',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    
 }
