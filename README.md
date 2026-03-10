@@ -22,8 +22,8 @@ Body JSON:
 
 ```json
 {
-  "login": "andrefelipe",
-  "password": "899605"
+  "login": "seu_login",
+  "password": "sua_senha"
 }
 ```
 
@@ -90,7 +90,7 @@ C:\Tools\php84-vs17\php\php.exe artisan serve --host=127.0.0.1 --port=8000
 ```bash
 curl --location "http://127.0.0.1:8000/api/login" \
 --header "Content-Type: application/json" \
---data "{\"login\":\"andrefelipe\",\"password\":\"899605\"}"
+--data "{\"login\":\"seu_login\",\"password\":\"sua_senha\"}"
 ```
 
 ### Testar usuarios
