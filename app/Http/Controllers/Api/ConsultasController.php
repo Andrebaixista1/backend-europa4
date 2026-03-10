@@ -92,48 +92,45 @@ class ConsultasController extends Controller
     public function permissoes()
     {
         try {
-            $result = DB::connection('sqlsrv')->selectOne("
+            $sql = "
+            ;WITH role_perm_agg AS (
+                SELECT
+                    rp.role_id,
+                    rp.permission_id,
+                    MAX(CAST(rp.allowed AS INT)) AS allowed
+                FROM [europa4].[dbo].[role_permissions45] rp
+                GROUP BY rp.role_id, rp.permission_id
+            ),
+            user_perm_agg AS (
+                SELECT
+                    up.user_id,
+                    up.permission_id,
+                    MAX(CAST(up.allowed AS INT)) AS allowed
+                FROM [europa4].[dbo].[user_permissions45] up
+                GROUP BY up.user_id, up.permission_id
+            ),
+            effective_permissions AS (
+                SELECT
+                    u.id AS user_id,
+                    p.id AS permission_id,
+                    p.nome,
+                    p.slug,
+                    p.modulo,
+                    p.descricao,
+                    CASE
+                        WHEN up.permission_id IS NOT NULL THEN up.allowed
+                        ELSE ISNULL(rp.allowed, 0)
+                    END AS allowed
+                FROM [europa4].[dbo].[users45] u
+                CROSS JOIN [europa4].[dbo].[permissions45] p
+                LEFT JOIN role_perm_agg rp
+                    ON rp.role_id = u.role_id
+                   AND rp.permission_id = p.id
+                LEFT JOIN user_perm_agg up
+                    ON up.user_id = u.id
+                   AND up.permission_id = p.id
+            )
             SELECT COALESCE((
-                USE [europa4];
-                SET NOCOUNT ON;
-
-                ;WITH role_perm_agg AS (
-                    SELECT
-                        rp.role_id,
-                        rp.permission_id,
-                        MAX(CAST(rp.allowed AS INT)) AS allowed
-                    FROM dbo.role_permissions45 rp
-                    GROUP BY rp.role_id, rp.permission_id
-                ),
-                user_perm_agg AS (
-                    SELECT
-                        up.user_id,
-                        up.permission_id,
-                        MAX(CAST(up.allowed AS INT)) AS allowed
-                    FROM dbo.user_permissions45 up
-                    GROUP BY up.user_id, up.permission_id
-                ),
-                effective_permissions AS (
-                    SELECT
-                        u.id AS user_id,
-                        p.id AS permission_id,
-                        p.nome,
-                        p.slug,
-                        p.modulo,
-                        p.descricao,
-                        CASE
-                            WHEN up.permission_id IS NOT NULL THEN up.allowed
-                            ELSE ISNULL(rp.allowed, 0)
-                        END AS allowed
-                    FROM dbo.users45 u
-                    CROSS JOIN dbo.permissions45 p
-                    LEFT JOIN role_perm_agg rp
-                        ON rp.role_id = u.role_id
-                    AND rp.permission_id = p.id
-                    LEFT JOIN user_perm_agg up
-                        ON up.user_id = u.id
-                    AND up.permission_id = p.id
-                )
                 SELECT
                     u.id,
                     u.nome,
@@ -156,13 +153,13 @@ class ConsultasController extends Controller
                             SELECT ',' + ep.slug
                             FROM effective_permissions ep
                             WHERE ep.user_id = u.id
-                            AND ep.allowed = 1
+                              AND ep.allowed = 1
                             ORDER BY ep.modulo, ep.slug
                             FOR XML PATH(''), TYPE
                         ).value('.', 'NVARCHAR(MAX)'), 1, 1, ''),
                         ''
                     ) AS permissoes,
-                    COALESCE((
+                    JSON_QUERY(COALESCE((
                         SELECT
                             ep.permission_id AS id,
                             ep.nome,
@@ -174,22 +171,24 @@ class ConsultasController extends Controller
                         WHERE ep.user_id = u.id
                         ORDER BY ep.modulo, ep.slug
                         FOR JSON PATH
-                    ), '[]') AS permissoes_json
-                FROM dbo.users45 u
-                LEFT JOIN dbo.equipes45 e
+                    ), '[]')) AS permissoes_json
+                FROM [europa4].[dbo].[users45] u
+                LEFT JOIN [europa4].[dbo].[equipes45] e
                     ON e.id = u.equipe_id
-                LEFT JOIN dbo.users45 sup
+                LEFT JOIN [europa4].[dbo].[users45] sup
                     ON sup.id = e.supervisor_user_id
-                LEFT JOIN dbo.roles45 r
+                LEFT JOIN [europa4].[dbo].[roles45] r
                     ON r.id = u.role_id
-                ORDER BY u.nome;
+                ORDER BY u.nome
                 FOR JSON PATH
             ), '[]') AS payload
-        ");
+        ";
+
+            $result = DB::connection('sqlsrv')->selectOne($sql);
 
             $payload = is_object($result) ? ($result->payload ?? '[]') : '[]';
 
-            if (! mb_check_encoding($payload, 'UTF-8')) {
+            if (!mb_check_encoding($payload, 'UTF-8')) {
                 $payload = mb_convert_encoding($payload, 'UTF-8', 'Windows-1252');
             }
 
@@ -203,9 +202,11 @@ class ConsultasController extends Controller
         } catch (Throwable $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Erro ao buscar usuarios',
+                'message' => 'Erro ao buscar usuários',
                 'error' => $e->getMessage(),
             ], 500);
         }
     }
+
+
 }
