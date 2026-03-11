@@ -177,6 +177,28 @@ class HandMaisController extends Controller
                         continue;
                     }
 
+                    if (!$this->equipePodeUsarSaldo($saldo->equipe_id ?? null, $fila->equipe_id ?? null)) {
+                        $this->salvarResultadoSemProduto(
+                            $fila,
+                            $saldo,
+                            'SEM_PERMISSAO_EQUIPE',
+                            'Equipe sem permissao para usar este login/token HandMais.'
+                        );
+
+                        DB::delete("
+                            DELETE FROM consultas_api.dbo.filaconsulta_handmais
+                            WHERE id = ?
+                        ", [$fila->id]);
+
+                        $erros[] = [
+                            'cpf' => $fila->cpf ?? null,
+                            'erro' => 'Equipe sem permissao para o id_consulta ' . (int) $fila->id_consulta,
+                        ];
+
+                        sleep(1);
+                        continue;
+                    }
+
                     $controleSaldo = $this->validarSaldoDiario($saldo);
 
                     if (!$controleSaldo['pode_consultar']) {
@@ -322,7 +344,7 @@ class HandMaisController extends Controller
                             'valor_margem' => $consulta['valor_margem'] ?? null,
                             'id_tabela' => $consulta['id'] ?? null,
                             'token_tabela' => $consulta['token_tabela'] ?? null,
-                            'id_user' => $this->resolverIdUser($fila, $saldo),
+                            'id_user' => $this->resolverIdUser($fila),
                             'equipe_id' => $this->resolverEquipeId($fila, $saldo),
                             'id_consulta_hand' => $fila->id_consulta,
                             'created_at' => now(),
@@ -342,7 +364,7 @@ class HandMaisController extends Controller
                                 'valor_margem' => $produto['valor_margem'] ?? null,
                                 'id_tabela' => $produto['id'] ?? null,
                                 'token_tabela' => $produto['token_tabela'] ?? null,
-                                'id_user' => $this->resolverIdUser($fila, $saldo),
+                                'id_user' => $this->resolverIdUser($fila),
                                 'equipe_id' => $this->resolverEquipeId($fila, $saldo),
                                 'id_consulta_hand' => $fila->id_consulta,
                                 'created_at' => now(),
@@ -591,7 +613,7 @@ class HandMaisController extends Controller
             'valor_margem' => null,
             'id_tabela' => null,
             'token_tabela' => null,
-            'id_user' => $this->resolverIdUser($fila, $saldo),
+            'id_user' => $this->resolverIdUser($fila),
             'equipe_id' => $this->resolverEquipeId($fila, $saldo),
             'id_consulta_hand' => $fila->id_consulta,
             'created_at' => now(),
@@ -599,14 +621,9 @@ class HandMaisController extends Controller
         ]);
     }
 
-    private function resolverIdUser(?object $fila, ?object $saldo = null): ?int
+    private function resolverIdUser(?object $fila): ?int
     {
-        $fromFila = $this->extrairInteiroPositivo($fila->id_user ?? null);
-        if ($fromFila !== null) {
-            return $fromFila;
-        }
-
-        return $this->extrairInteiroPositivo($saldo->id_user ?? null);
+        return $this->extrairInteiroPositivo($fila->id_user ?? null);
     }
 
     private function resolverEquipeId(?object $fila, ?object $saldo = null): ?int
@@ -616,7 +633,7 @@ class HandMaisController extends Controller
             return $fromFila;
         }
 
-        return $this->extrairInteiroPositivo($saldo->equipe_id ?? null);
+        return null;
     }
 
     private function extrairInteiroPositivo(mixed $valor): ?int
@@ -801,6 +818,69 @@ class HandMaisController extends Controller
         }
 
         return $retorno;
+    }
+
+    private function equipePodeUsarSaldo(mixed $equipeIdsPermitidos, mixed $equipeIdFila): bool
+    {
+        $equipeFila = $this->extrairInteiroPositivo($equipeIdFila);
+
+        if ($equipeFila === null) {
+            return false;
+        }
+
+        $permitidos = $this->parseEquipeIdsPermitidos($equipeIdsPermitidos);
+
+        // Regra de negocio: equipe 1 pode usar por padrao em qualquer token.
+        if (!in_array(1, $permitidos, true)) {
+            $permitidos[] = 1;
+        }
+
+        return in_array($equipeFila, $permitidos, true);
+    }
+
+    /**
+     * @return array<int>
+     */
+    private function parseEquipeIdsPermitidos(mixed $valor): array
+    {
+        if ($valor === null || $valor === '') {
+            return [1];
+        }
+
+        if (is_int($valor)) {
+            return $valor > 0 ? [$valor, 1] : [1];
+        }
+
+        if (is_string($valor)) {
+            $texto = trim($valor);
+
+            if ($texto === '') {
+                return [1];
+            }
+
+            $texto = trim($texto, "[]");
+            $partes = preg_split('/[,\;\|\s]+/', $texto) ?: [];
+            $ids = [];
+
+            foreach ($partes as $parte) {
+                if ($parte === '') {
+                    continue;
+                }
+
+                $id = $this->extrairInteiroPositivo($parte);
+                if ($id !== null) {
+                    $ids[] = $id;
+                }
+            }
+
+            if (!in_array(1, $ids, true)) {
+                $ids[] = 1;
+            }
+
+            return array_values(array_unique($ids));
+        }
+
+        return [1];
     }
 
     /**
