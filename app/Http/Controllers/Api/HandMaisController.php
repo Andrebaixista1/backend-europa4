@@ -9,6 +9,7 @@ use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Symfony\Component\Process\Process;
 use Throwable;
+use DateTimeImmutable;
 
 class HandMaisController extends Controller
 {
@@ -158,26 +159,31 @@ class HandMaisController extends Controller
                         continue;
                     }
 
-                    if ((int) $saldo->limite <= 0) {
-                        $this->salvarResultadoSemProduto(
-                            $fila,
-                            $saldo,
-                            'SEM_LIMITE',
-                            'Sem limite disponível para consultas.'
-                        );
+                    $controleSaldo = $this->validarSaldoDiario($saldo);
 
-                        DB::delete("
-                            DELETE FROM consultas_api.dbo.filaconsulta_handmais
+                    if (!$controleSaldo['pode_consultar']) {
+                        return response()->json([
+                            'success' => false,
+                            'message' => 'Limite de consultas diarias atingidas.',
+                            'libera_em' => $controleSaldo['libera_em'],
+                            'id_consulta' => (int) $fila->id_consulta,
+                        ], 429);
+                    }
+
+                    if ($controleSaldo['resetado']) {
+                        $saldo = DB::selectOne("
+                            SELECT TOP 1 *
+                            FROM consultas_api.dbo.saldo_handmais
                             WHERE id = ?
-                        ", [$fila->id]);
+                        ", [$fila->id_consulta]);
 
-                        $erros[] = [
-                            'cpf' => $fila->cpf,
-                            'erro' => 'Sem limite'
-                        ];
-
-                        sleep(3);
-                        continue;
+                        if (!$saldo) {
+                            return response()->json([
+                                'success' => false,
+                                'message' => 'Saldo nao encontrado apos reset de 24h.',
+                                'id_consulta' => (int) $fila->id_consulta,
+                            ], 500);
+                        }
                     }
 
                     $cpfNormalizado = $this->normalizarCpf((string) $fila->cpf);
@@ -676,6 +682,95 @@ class HandMaisController extends Controller
                 @Resource = ?,
                 @LockOwner = 'Session';
         ", ['handmais:processar_fila']);
+    }
+
+    /**
+     * @return array{pode_consultar: bool, resetado: bool, libera_em: ?string}
+     */
+    private function validarSaldoDiario(object $saldo): array
+    {
+        $limiteAtual = (int) ($saldo->limite ?? 0);
+
+        if ($limiteAtual > 0) {
+            return [
+                'pode_consultar' => true,
+                'resetado' => false,
+                'libera_em' => null,
+            ];
+        }
+
+        $atualizadoEm = $this->criarDataHora($saldo->updated_at ?? null);
+
+        if (!$atualizadoEm) {
+            $this->resetarSaldoDiario((int) $saldo->id);
+
+            return [
+                'pode_consultar' => true,
+                'resetado' => true,
+                'libera_em' => null,
+            ];
+        }
+
+        $liberaEm = $atualizadoEm->modify('+24 hours');
+        $agora = new DateTimeImmutable('now', $liberaEm->getTimezone());
+
+        if ($agora >= $liberaEm) {
+            $this->resetarSaldoDiario((int) $saldo->id);
+
+            return [
+                'pode_consultar' => true,
+                'resetado' => true,
+                'libera_em' => $liberaEm->format('d/m/Y H:i:s'),
+            ];
+        }
+
+        return [
+            'pode_consultar' => false,
+            'resetado' => false,
+            'libera_em' => $liberaEm->format('d/m/Y H:i:s'),
+        ];
+    }
+
+    private function resetarSaldoDiario(int $saldoId): void
+    {
+        DB::update("
+            UPDATE consultas_api.dbo.saldo_handmais
+            SET consultados = 0,
+                limite = ISNULL(total, 0),
+                updated_at = GETDATE()
+            WHERE id = ?
+        ", [$saldoId]);
+    }
+
+    private function criarDataHora(mixed $valor): ?DateTimeImmutable
+    {
+        if (!$valor) {
+            return null;
+        }
+
+        if ($valor instanceof DateTimeImmutable) {
+            return $valor;
+        }
+
+        if (is_string($valor)) {
+            $data = trim($valor);
+
+            if ($data === '') {
+                return null;
+            }
+
+            try {
+                return new DateTimeImmutable($data);
+            } catch (Throwable $e) {
+                return null;
+            }
+        }
+
+        try {
+            return new DateTimeImmutable((string) $valor);
+        } catch (Throwable $e) {
+            return null;
+        }
     }
 }
 
