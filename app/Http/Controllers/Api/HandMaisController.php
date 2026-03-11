@@ -858,7 +858,7 @@ class HandMaisController extends Controller
                 return [1];
             }
 
-            $texto = trim($texto, "[]");
+            $texto = trim($texto, "[]{}()");
             $partes = preg_split('/[,\;\|\s]+/', $texto) ?: [];
             $ids = [];
 

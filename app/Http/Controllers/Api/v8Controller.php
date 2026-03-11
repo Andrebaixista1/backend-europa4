@@ -174,6 +174,22 @@ class v8Controller extends Controller
                         continue;
                     }
 
+                    if (!$this->equipePodeUsarSaldo($saldo->equipe_id ?? null, $fila->equipe_id ?? null)) {
+                        $this->salvarConsultaV8($fila, [
+                            'status' => 'SEM_PERMISSAO_EQUIPE',
+                            'status_consulta_v8' => 'TEAM_NOT_ALLOWED',
+                            'descricao_v8' => 'Equipe sem permissao para usar este login/token V8.',
+                        ]);
+
+                        $this->removerFila((int) $fila->id);
+                        $erros[] = [
+                            'cpf' => $fila->cpf ?? null,
+                            'erro' => 'Equipe sem permissao para o id_consulta ' . (int) $fila->id_consulta,
+                        ];
+                        sleep(1);
+                        continue;
+                    }
+
                     $controleLimite = $this->validarLimitePorHora($saldo);
 
                     if (!$controleLimite['pode_consultar']) {
@@ -950,5 +966,68 @@ class v8Controller extends Controller
         }
 
         return $retorno;
+    }
+
+    private function equipePodeUsarSaldo(mixed $equipeIdsPermitidos, mixed $equipeIdFila): bool
+    {
+        $equipeFila = $this->extrairInteiroPositivo($equipeIdFila);
+
+        if ($equipeFila === null) {
+            return false;
+        }
+
+        $permitidos = $this->parseEquipeIdsPermitidos($equipeIdsPermitidos);
+
+        // Regra de negocio: equipe 1 pode usar por padrao em qualquer token.
+        if (!in_array(1, $permitidos, true)) {
+            $permitidos[] = 1;
+        }
+
+        return in_array($equipeFila, $permitidos, true);
+    }
+
+    /**
+     * @return array<int>
+     */
+    private function parseEquipeIdsPermitidos(mixed $valor): array
+    {
+        if ($valor === null || $valor === '') {
+            return [1];
+        }
+
+        if (is_int($valor)) {
+            return $valor > 0 ? [$valor, 1] : [1];
+        }
+
+        if (is_string($valor)) {
+            $texto = trim($valor);
+
+            if ($texto === '') {
+                return [1];
+            }
+
+            $texto = trim($texto, "[]{}()");
+            $partes = preg_split('/[,\;\|\s]+/', $texto) ?: [];
+            $ids = [];
+
+            foreach ($partes as $parte) {
+                if ($parte === '') {
+                    continue;
+                }
+
+                $id = $this->extrairInteiroPositivo($parte);
+                if ($id !== null) {
+                    $ids[] = $id;
+                }
+            }
+
+            if (!in_array(1, $ids, true)) {
+                $ids[] = 1;
+            }
+
+            return array_values(array_unique($ids));
+        }
+
+        return [1];
     }
 }
