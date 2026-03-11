@@ -4,6 +4,7 @@ use App\Http\Controllers\Api\PingController;
 use Illuminate\Http\Request;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\ConsultasController;
+use App\Http\Controllers\Api\CriacaoController;
 use App\Http\Controllers\Api\HandMaisController;
 use App\Http\Controllers\Api\v8Controller;
 use Illuminate\Support\Facades\Route;
@@ -40,7 +41,9 @@ Route::get('/logins/consultasv8', [ConsultasController::class, 'v8_login']);
 // Hand +
 Route::post('/online/consultashandmais', [HandMaisController::class, 'handmais_online']);
 Route::get('/start/consultashandmais', [HandMaisController::class, 'processar_fila']);
+Route::post('/register/consultashandmais', [CriacaoController::class, 'handmais_cadastro']);
 
 // V8 
+Route::post('/register/consultasv8', [CriacaoController::class, 'v8_cadastro']);
 Route::post('/online/consultasv8', [v8Controller::class, 'V8_online']);
 Route::get('/start/consultasv8', [v8Controller::class, 'processar_fila']);
