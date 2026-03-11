@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use Illuminate\Support\Facades\DB;
+use Symfony\Component\HttpFoundation\Request;
 use Throwable;
 
 class ConsultasController extends Controller
@@ -294,6 +295,7 @@ class ConsultasController extends Controller
             ], 500);
         }
     }
-
     
+   
+
 }
