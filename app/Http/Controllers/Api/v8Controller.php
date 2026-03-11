@@ -34,6 +34,8 @@ class v8Controller extends Controller
             if (!$request->filled('nome')) $faltando[] = 'nome';
             if (!$request->filled('data_nascimento')) $faltando[] = 'data_nascimento';
             if (!$request->filled('id_consulta')) $faltando[] = 'id_consulta';
+            if (!$request->filled('id_user')) $faltando[] = 'id_user';
+            if (!$request->filled('equipe_id')) $faltando[] = 'equipe_id';
 
             if (!empty($faltando)) {
                 return response()->json([
@@ -46,8 +48,17 @@ class v8Controller extends Controller
             $cpf = $this->normalizarCpf((string) $request->cpf);
             $nome = trim((string) $request->nome);
             $idConsulta = (int) $request->id_consulta;
+            $idUser = (int) $request->id_user;
+            $equipeId = (int) $request->equipe_id;
             $dataNascimento = $this->normalizarDataParaSql((string) $request->data_nascimento);
             $telefone = $this->normalizarTelefone((string) ($request->telefone ?? ''));
+
+            if ($idUser <= 0 || $equipeId <= 0) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'id_user e equipe_id devem ser numeros inteiros maiores que zero.',
+                ], 400);
+            }
 
             if ($dataNascimento === null) {
                 return response()->json([
@@ -66,6 +77,8 @@ class v8Controller extends Controller
                 'telefone' => $telefone,
                 'status' => 'fila',
                 'id_consulta' => $idConsulta,
+                'id_user' => $idUser,
+                'equipe_id' => $equipeId,
                 'dataNascimento' => $dataNascimento,
                 'created_at' => now(),
                 'updated_at' => now(),
@@ -81,6 +94,8 @@ class v8Controller extends Controller
                     'telefone' => $telefone,
                     'dataNascimento' => $dataNascimento,
                     'id_consulta' => $idConsulta,
+                    'id_user' => $idUser,
+                    'equipe_id' => $equipeId,
                 ],
             ], 200);
         } catch (Throwable $e) {
@@ -600,8 +615,8 @@ class v8Controller extends Controller
             'status_consulta_v8' => $dados['status_consulta_v8'] ?? null,
             'valor_liberado' => $dados['valor_liberado'] ?? null,
             'descricao_v8' => $dados['descricao_v8'] ?? null,
-            'id_user' => null,
-            'id_equipe' => null,
+            'id_user' => $this->extrairInteiroPositivo($fila->id_user ?? null),
+            'id_equipe' => $this->extrairInteiroPositivo($fila->equipe_id ?? null),
             'id_roles' => null,
             'tipoConsulta' => 'CLT',
         ]);
@@ -828,6 +843,16 @@ class v8Controller extends Controller
         }
 
         return $value;
+    }
+
+    private function extrairInteiroPositivo(mixed $valor): ?int
+    {
+        if ($valor === null || $valor === '') {
+            return null;
+        }
+
+        $intValue = (int) $valor;
+        return $intValue > 0 ? $intValue : null;
     }
 
     private function adquirirLockFila(): bool

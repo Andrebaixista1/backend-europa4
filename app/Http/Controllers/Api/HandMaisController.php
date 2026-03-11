@@ -22,6 +22,8 @@ class HandMaisController extends Controller
             if (!$request->filled('nome')) $faltando[] = 'nome';
             if (!$request->filled('data_nascimento')) $faltando[] = 'data_nascimento';
             if (!$request->filled('id_consulta')) $faltando[] = 'id_consulta';
+            if (!$request->filled('id_user')) $faltando[] = 'id_user';
+            if (!$request->filled('equipe_id')) $faltando[] = 'equipe_id';
 
             if (!empty($faltando)) {
                 return response()->json([
@@ -36,6 +38,15 @@ class HandMaisController extends Controller
             $telefone = preg_replace('/\D/', '', (string) ($request->telefone ?? ''));
             $dataNascimento = trim((string) $request->data_nascimento);
             $idConsulta = (int) $request->id_consulta;
+            $idUser = (int) $request->id_user;
+            $equipeId = (int) $request->equipe_id;
+
+            if ($idUser <= 0 || $equipeId <= 0) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'id_user e equipe_id devem ser numeros inteiros maiores que zero.'
+                ], 400);
+            }
 
             if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $dataNascimento)) {
                 return response()->json([
@@ -57,6 +68,8 @@ class HandMaisController extends Controller
                 'dataNascimento' => $dataNascimentoFormatada,
                 'status' => 'fila',
                 'id_consulta' => $idConsulta,
+                'id_user' => $idUser,
+                'equipe_id' => $equipeId,
                 'created_at' => now(),
                 'updated_at' => now()
             ]);
@@ -70,7 +83,9 @@ class HandMaisController extends Controller
                     'nome' => $nome,
                     'telefone' => $telefone,
                     'dataNascimento' => $dataNascimentoFormatada,
-                    'id_consulta' => $idConsulta
+                    'id_consulta' => $idConsulta,
+                    'id_user' => $idUser,
+                    'equipe_id' => $equipeId
                 ]
             ], 200);
         } catch (Throwable $e) {
@@ -290,8 +305,8 @@ class HandMaisController extends Controller
                             'valor_margem' => $consulta['valor_margem'] ?? null,
                             'id_tabela' => $consulta['id'] ?? null,
                             'token_tabela' => $consulta['token_tabela'] ?? null,
-                            'id_user' => $saldo->id_user ?? null,
-                            'equipe_id' => $saldo->equipe_id ?? null,
+                            'id_user' => $this->resolverIdUser($fila, $saldo),
+                            'equipe_id' => $this->resolverEquipeId($fila, $saldo),
                             'id_consulta_hand' => $fila->id_consulta,
                             'created_at' => now(),
                             'updated_at' => now()
@@ -310,8 +325,8 @@ class HandMaisController extends Controller
                                 'valor_margem' => $produto['valor_margem'] ?? null,
                                 'id_tabela' => $produto['id'] ?? null,
                                 'token_tabela' => $produto['token_tabela'] ?? null,
-                                'id_user' => $saldo->id_user ?? null,
-                                'equipe_id' => $saldo->equipe_id ?? null,
+                                'id_user' => $this->resolverIdUser($fila, $saldo),
+                                'equipe_id' => $this->resolverEquipeId($fila, $saldo),
                                 'id_consulta_hand' => $fila->id_consulta,
                                 'created_at' => now(),
                                 'updated_at' => now()
@@ -520,12 +535,42 @@ class HandMaisController extends Controller
             'valor_margem' => null,
             'id_tabela' => null,
             'token_tabela' => null,
-            'id_user' => $saldo->id_user ?? null,
-            'equipe_id' => $saldo->equipe_id ?? null,
+            'id_user' => $this->resolverIdUser($fila, $saldo),
+            'equipe_id' => $this->resolverEquipeId($fila, $saldo),
             'id_consulta_hand' => $fila->id_consulta,
             'created_at' => now(),
             'updated_at' => now()
         ]);
+    }
+
+    private function resolverIdUser(?object $fila, ?object $saldo = null): ?int
+    {
+        $fromFila = $this->extrairInteiroPositivo($fila->id_user ?? null);
+        if ($fromFila !== null) {
+            return $fromFila;
+        }
+
+        return $this->extrairInteiroPositivo($saldo->id_user ?? null);
+    }
+
+    private function resolverEquipeId(?object $fila, ?object $saldo = null): ?int
+    {
+        $fromFila = $this->extrairInteiroPositivo($fila->equipe_id ?? null);
+        if ($fromFila !== null) {
+            return $fromFila;
+        }
+
+        return $this->extrairInteiroPositivo($saldo->equipe_id ?? null);
+    }
+
+    private function extrairInteiroPositivo(mixed $valor): ?int
+    {
+        if ($valor === null || $valor === '') {
+            return null;
+        }
+
+        $intValue = (int) $valor;
+        return $intValue > 0 ? $intValue : null;
     }
 
     private function consultaTemProdutos($consulta): bool
