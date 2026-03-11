@@ -117,7 +117,8 @@ class v8Controller extends Controller
     {
         $processados = [];
         $erros = [];
-        $lockAdquirido = false;
+        $idsBloqueados = [];
+        $idsAguardando = [];
 
         if (function_exists('set_time_limit')) {
             @set_time_limit(0);
@@ -128,23 +129,36 @@ class v8Controller extends Controller
         }
 
         try {
-            $lockAdquirido = $this->adquirirLockFila();
-
-            if (!$lockAdquirido) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Processamento da fila V8 ja esta em andamento. Aguarde finalizar.',
-                ], 409);
-            }
-
             while (true) {
-                $fila = $this->buscarProximaFila();
+                $idsPendentes = $this->listarIdsConsultaPendentes();
 
-                if (!$fila) {
+                if ($idsPendentes === []) {
                     break;
                 }
 
-                try {
+                $processouNestaRodada = false;
+
+                foreach ($idsPendentes as $idConsulta) {
+                    if (isset($idsBloqueados[$idConsulta]) || isset($idsAguardando[$idConsulta])) {
+                        continue;
+                    }
+
+                    $lockAdquirido = $this->adquirirLockFilaPorConsulta($idConsulta);
+
+                    if (!$lockAdquirido) {
+                        continue;
+                    }
+
+                    try {
+                        $fila = $this->buscarProximaFilaPorConsulta($idConsulta);
+
+                        if (!$fila) {
+                            continue;
+                        }
+
+                        $processouNestaRodada = true;
+
+                        try {
                     $saldo = $this->buscarSaldo((int) $fila->id_consulta);
 
                     if (!$saldo) {
@@ -163,22 +177,30 @@ class v8Controller extends Controller
                     $controleLimite = $this->validarLimitePorHora($saldo);
 
                     if (!$controleLimite['pode_consultar']) {
-                        return response()->json([
-                            'success' => false,
-                            'message' => 'Limite de consultas por hora atingido.',
-                            'libera_em' => $controleLimite['libera_em'],
-                            'id_consulta' => (int) $fila->id_consulta,
-                        ], 429);
+                        $idsBloqueados[(int) $fila->id_consulta] = $controleLimite['libera_em'];
+                        $erros[] = [
+                            'cpf' => $fila->cpf ?? null,
+                            'erro' => 'Limite de consultas por hora atingido para id_consulta ' . (int) $fila->id_consulta
+                                . '. Libera em: ' . ($controleLimite['libera_em'] ?? 'N/A'),
+                        ];
+                        continue;
                     }
 
                     if ($controleLimite['resetado']) {
                         $saldo = $this->buscarSaldo((int) $fila->id_consulta);
                         if (!$saldo) {
-                            return response()->json([
-                                'success' => false,
-                                'message' => 'Saldo nao encontrado apos reset de 1h.',
-                                'id_consulta' => (int) $fila->id_consulta,
-                            ], 500);
+                            $this->salvarConsultaV8($fila, [
+                                'status' => 'ERRO_SALDO',
+                                'status_consulta_v8' => 'SALDO_NOT_FOUND',
+                                'descricao_v8' => 'Saldo V8 nao encontrado apos reset de 1h.',
+                            ]);
+
+                            $this->removerFila((int) $fila->id);
+                            $erros[] = [
+                                'cpf' => $fila->cpf ?? null,
+                                'erro' => 'Saldo nao encontrado apos reset de 1h.',
+                            ];
+                            continue;
                         }
                     }
 
@@ -249,6 +271,7 @@ class v8Controller extends Controller
 
                     if ($resultado['waiting']) {
                         $this->marcarFilaAguardando((int) $fila->id);
+                        $idsAguardando[(int) $fila->id_consulta] = true;
                         $erros[] = [
                             'cpf' => $fila->cpf ?? null,
                             'erro' => 'Consulta ainda em processamento na V8 (aguardando).',
@@ -282,22 +305,37 @@ class v8Controller extends Controller
                     $this->removerFila((int) $fila->id);
                     $processados[] = $fila->cpf ?? null;
                     sleep(2);
-                } catch (Throwable $e) {
-                    Log::error('Erro ao processar item da fila V8', [
-                        'fila_id' => $fila->id ?? null,
-                        'cpf' => $fila->cpf ?? null,
-                        'message' => $e->getMessage(),
-                        'line' => $e->getLine(),
-                        'file' => $e->getFile(),
-                    ]);
+                        } catch (Throwable $e) {
+                            Log::error('Erro ao processar item da fila V8', [
+                                'fila_id' => $fila->id ?? null,
+                                'cpf' => $fila->cpf ?? null,
+                                'message' => $e->getMessage(),
+                                'line' => $e->getLine(),
+                                'file' => $e->getFile(),
+                            ]);
 
-                    $erros[] = [
-                        'cpf' => $fila->cpf ?? null,
-                        'erro' => $e->getMessage(),
-                    ];
+                            $erros[] = [
+                                'cpf' => $fila->cpf ?? null,
+                                'erro' => $e->getMessage(),
+                            ];
 
-                    $this->removerFila((int) ($fila->id ?? 0));
-                    sleep(2);
+                            $this->removerFila((int) ($fila->id ?? 0));
+                            sleep(2);
+                        }
+                    } finally {
+                        try {
+                            $this->liberarLockFilaPorConsulta($idConsulta);
+                        } catch (Throwable $e) {
+                            Log::warning('Falha ao liberar lock da fila V8 por id_consulta', [
+                                'id_consulta' => $idConsulta,
+                                'message' => $e->getMessage(),
+                            ]);
+                        }
+                    }
+                }
+
+                if (!$processouNestaRodada) {
+                    break;
                 }
             }
 
@@ -307,6 +345,8 @@ class v8Controller extends Controller
                 'total_processados' => count($processados),
                 'cpfs_processados' => $processados,
                 'erros' => $erros,
+                'ids_bloqueados' => $this->formatarIdsBloqueados($idsBloqueados),
+                'ids_aguardando' => array_values(array_keys($idsAguardando)),
             ], 200);
         } catch (Throwable $e) {
             Log::error('Erro geral em processar_fila V8', [
@@ -321,25 +361,40 @@ class v8Controller extends Controller
                 'error' => $e->getMessage(),
                 'processados_ate_agora' => $processados,
                 'erros' => $erros,
+                'ids_bloqueados' => $this->formatarIdsBloqueados($idsBloqueados),
+                'ids_aguardando' => array_values(array_keys($idsAguardando)),
             ], 500);
-        } finally {
-            if ($lockAdquirido) {
-                try {
-                    $this->liberarLockFila();
-                } catch (Throwable $e) {
-                    Log::warning('Falha ao liberar lock da fila V8', [
-                        'message' => $e->getMessage(),
-                    ]);
-                }
-            }
         }
     }
 
-    private function buscarProximaFila(): ?object
+    private function listarIdsConsultaPendentes(): array
+    {
+        $rows = DB::select("
+            SELECT DISTINCT CAST(id_consulta AS INT) AS id_consulta
+            FROM consultas_api.dbo.filaconsulta_v8
+            WHERE id_consulta IS NOT NULL
+            ORDER BY CAST(id_consulta AS INT) ASC
+        ");
+
+        $ids = [];
+
+        foreach ($rows as $row) {
+            $idConsulta = $this->extrairInteiroPositivo($row->id_consulta ?? null);
+
+            if ($idConsulta !== null) {
+                $ids[] = $idConsulta;
+            }
+        }
+
+        return $ids;
+    }
+
+    private function buscarProximaFilaPorConsulta(int $idConsulta): ?object
     {
         return DB::selectOne("
             SELECT TOP 1 *
             FROM consultas_api.dbo.filaconsulta_v8
+            WHERE id_consulta = ?
             ORDER BY
                 CASE
                     WHEN LOWER(ISNULL(status, 'fila')) = 'fila' THEN 0
@@ -348,7 +403,7 @@ class v8Controller extends Controller
                 END,
                 ISNULL(updated_at, created_at) ASC,
                 id ASC
-        ");
+        ", [$idConsulta]);
     }
 
     private function buscarSaldo(int $idConsulta): ?object
@@ -855,8 +910,10 @@ class v8Controller extends Controller
         return $intValue > 0 ? $intValue : null;
     }
 
-    private function adquirirLockFila(): bool
+    private function adquirirLockFilaPorConsulta(int $idConsulta): bool
     {
+        $resource = 'v8:processar_fila:' . $idConsulta;
+
         $result = DB::selectOne("
             DECLARE @resultado INT;
             EXEC @resultado = sp_getapplock
@@ -865,17 +922,33 @@ class v8Controller extends Controller
                 @LockOwner = 'Session',
                 @LockTimeout = 0;
             SELECT @resultado AS resultado;
-        ", ['v8:processar_fila']);
+        ", [$resource]);
 
         return is_object($result) && isset($result->resultado) && (int) $result->resultado >= 0;
     }
 
-    private function liberarLockFila(): void
+    private function liberarLockFilaPorConsulta(int $idConsulta): void
     {
+        $resource = 'v8:processar_fila:' . $idConsulta;
+
         DB::statement("
             EXEC sp_releaseapplock
                 @Resource = ?,
                 @LockOwner = 'Session';
-        ", ['v8:processar_fila']);
+        ", [$resource]);
+    }
+
+    private function formatarIdsBloqueados(array $idsBloqueados): array
+    {
+        $retorno = [];
+
+        foreach ($idsBloqueados as $idConsulta => $liberaEm) {
+            $retorno[] = [
+                'id_consulta' => (int) $idConsulta,
+                'libera_em' => $liberaEm,
+            ];
+        }
+
+        return $retorno;
     }
 }

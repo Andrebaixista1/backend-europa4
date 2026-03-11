@@ -107,7 +107,7 @@ class HandMaisController extends Controller
     {
         $processados = [];
         $erros = [];
-        $lockAdquirido = false;
+        $idsBloqueados = [];
 
         // A fila pode demorar para finalizar; nao deixar a request expirar.
         if (function_exists('set_time_limit')) {
@@ -119,33 +119,36 @@ class HandMaisController extends Controller
         }
 
         try {
-            // Bloqueia chamadas concorrentes do endpoint ate o processamento terminar.
-            $lockAdquirido = $this->adquirirLockFila();
-
-            if (!$lockAdquirido) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Processamento da fila ja esta em andamento. Aguarde finalizar.'
-                ], 409);
-            }
-
             while (true) {
-                $fila = DB::selectOne("
-                    SELECT *
-                    FROM (
-                        SELECT 
-                            ROW_NUMBER() OVER (ORDER BY id ASC) AS posicao,
-                            *
-                        FROM consultas_api.dbo.filaconsulta_handmais
-                    ) fila
-                    WHERE posicao = 1
-                ");
+                $idsPendentes = $this->listarIdsConsultaPendentes();
 
-                if (!$fila) {
+                if ($idsPendentes === []) {
                     break;
                 }
 
-                try {
+                $processouNestaRodada = false;
+
+                foreach ($idsPendentes as $idConsulta) {
+                    if (isset($idsBloqueados[$idConsulta])) {
+                        continue;
+                    }
+
+                    $lockAdquirido = $this->adquirirLockFilaPorConsulta($idConsulta);
+
+                    if (!$lockAdquirido) {
+                        continue;
+                    }
+
+                    try {
+                        $fila = $this->buscarProximaFilaPorConsulta($idConsulta);
+
+                        if (!$fila) {
+                            continue;
+                        }
+
+                        $processouNestaRodada = true;
+
+                        try {
                     $saldo = DB::selectOne("
                         SELECT TOP 1 *
                         FROM consultas_api.dbo.saldo_handmais
@@ -177,12 +180,13 @@ class HandMaisController extends Controller
                     $controleSaldo = $this->validarSaldoDiario($saldo);
 
                     if (!$controleSaldo['pode_consultar']) {
-                        return response()->json([
-                            'success' => false,
-                            'message' => 'Limite de consultas diarias atingidas.',
-                            'libera_em' => $controleSaldo['libera_em'],
-                            'id_consulta' => (int) $fila->id_consulta,
-                        ], 429);
+                        $idsBloqueados[(int) $fila->id_consulta] = $controleSaldo['libera_em'];
+                        $erros[] = [
+                            'cpf' => $fila->cpf ?? null,
+                            'erro' => 'Limite de consultas diarias atingido para id_consulta ' . (int) $fila->id_consulta
+                                . '. Libera em: ' . ($controleSaldo['libera_em'] ?? 'N/A'),
+                        ];
+                        continue;
                     }
 
                     if ($controleSaldo['resetado']) {
@@ -193,11 +197,24 @@ class HandMaisController extends Controller
                         ", [$fila->id_consulta]);
 
                         if (!$saldo) {
-                            return response()->json([
-                                'success' => false,
-                                'message' => 'Saldo nao encontrado apos reset de 24h.',
-                                'id_consulta' => (int) $fila->id_consulta,
-                            ], 500);
+                            $this->salvarResultadoSemProduto(
+                                $fila,
+                                null,
+                                'SEM_SALDO',
+                                'Saldo nao encontrado apos reset de 24h.'
+                            );
+
+                            DB::delete("
+                                DELETE FROM consultas_api.dbo.filaconsulta_handmais
+                                WHERE id = ?
+                            ", [$fila->id]);
+
+                            $erros[] = [
+                                'cpf' => $fila->cpf ?? null,
+                                'erro' => 'Saldo nao encontrado apos reset de 24h.',
+                            ];
+
+                            continue;
                         }
                     }
 
@@ -369,26 +386,41 @@ class HandMaisController extends Controller
                     $processados[] = $fila->cpf;
 
                     sleep(3);
-                } catch (Throwable $e) {
-                    Log::error('Erro ao processar item da fila handmais', [
-                        'fila_id' => $fila->id ?? null,
-                        'cpf' => $fila->cpf ?? null,
-                        'message' => $e->getMessage(),
-                        'line' => $e->getLine(),
-                        'file' => $e->getFile(),
-                    ]);
+                        } catch (Throwable $e) {
+                            Log::error('Erro ao processar item da fila handmais', [
+                                'fila_id' => $fila->id ?? null,
+                                'cpf' => $fila->cpf ?? null,
+                                'message' => $e->getMessage(),
+                                'line' => $e->getLine(),
+                                'file' => $e->getFile(),
+                            ]);
 
-                    $erros[] = [
-                        'cpf' => $fila->cpf ?? null,
-                        'erro' => $e->getMessage()
-                    ];
+                            $erros[] = [
+                                'cpf' => $fila->cpf ?? null,
+                                'erro' => $e->getMessage()
+                            ];
 
-                    DB::delete("
-                        DELETE FROM consultas_api.dbo.filaconsulta_handmais
-                        WHERE id = ?
-                    ", [$fila->id]);
+                            DB::delete("
+                                DELETE FROM consultas_api.dbo.filaconsulta_handmais
+                                WHERE id = ?
+                            ", [$fila->id]);
 
-                    sleep(3);
+                            sleep(3);
+                        }
+                    } finally {
+                        try {
+                            $this->liberarLockFilaPorConsulta($idConsulta);
+                        } catch (Throwable $e) {
+                            Log::warning('Falha ao liberar lock da fila handmais por id_consulta', [
+                                'id_consulta' => $idConsulta,
+                                'message' => $e->getMessage(),
+                            ]);
+                        }
+                    }
+                }
+
+                if (!$processouNestaRodada) {
+                    break;
                 }
             }
 
@@ -397,7 +429,8 @@ class HandMaisController extends Controller
                 'message' => 'Fila processada.',
                 'total_processados' => count($processados),
                 'cpfs_processados' => $processados,
-                'erros' => $erros
+                'erros' => $erros,
+                'ids_bloqueados' => $this->formatarIdsBloqueados($idsBloqueados),
             ], 200);
         } catch (Throwable $e) {
             Log::error('Erro geral em processar_fila handmais', [
@@ -411,19 +444,42 @@ class HandMaisController extends Controller
                 'message' => 'Erro ao processar fila.',
                 'error' => $e->getMessage(),
                 'processados_ate_agora' => $processados,
-                'erros' => $erros
+                'erros' => $erros,
+                'ids_bloqueados' => $this->formatarIdsBloqueados($idsBloqueados),
             ], 500);
-        } finally {
-            if ($lockAdquirido) {
-                try {
-                    $this->liberarLockFila();
-                } catch (Throwable $e) {
-                    Log::warning('Falha ao liberar lock da fila handmais', [
-                        'message' => $e->getMessage(),
-                    ]);
-                }
+        }
+    }
+
+    private function listarIdsConsultaPendentes(): array
+    {
+        $rows = DB::select("
+            SELECT DISTINCT CAST(id_consulta AS INT) AS id_consulta
+            FROM consultas_api.dbo.filaconsulta_handmais
+            WHERE id_consulta IS NOT NULL
+            ORDER BY CAST(id_consulta AS INT) ASC
+        ");
+
+        $ids = [];
+
+        foreach ($rows as $row) {
+            $idConsulta = $this->extrairInteiroPositivo($row->id_consulta ?? null);
+
+            if ($idConsulta !== null) {
+                $ids[] = $idConsulta;
             }
         }
+
+        return $ids;
+    }
+
+    private function buscarProximaFilaPorConsulta(int $idConsulta): ?object
+    {
+        return DB::selectOne("
+            SELECT TOP 1 *
+            FROM consultas_api.dbo.filaconsulta_handmais
+            WHERE id_consulta = ?
+            ORDER BY id ASC
+        ", [$idConsulta]);
     }
 
     private function consultarMargem(string $cpf, string $token): array
@@ -705,8 +761,10 @@ class HandMaisController extends Controller
         return null;
     }
 
-    private function adquirirLockFila(): bool
+    private function adquirirLockFilaPorConsulta(int $idConsulta): bool
     {
+        $resource = 'handmais:processar_fila:' . $idConsulta;
+
         $result = DB::selectOne("
             DECLARE @resultado INT;
             EXEC @resultado = sp_getapplock
@@ -715,18 +773,34 @@ class HandMaisController extends Controller
                 @LockOwner = 'Session',
                 @LockTimeout = 0;
             SELECT @resultado AS resultado;
-        ", ['handmais:processar_fila']);
+        ", [$resource]);
 
         return is_object($result) && isset($result->resultado) && (int) $result->resultado >= 0;
     }
 
-    private function liberarLockFila(): void
+    private function liberarLockFilaPorConsulta(int $idConsulta): void
     {
+        $resource = 'handmais:processar_fila:' . $idConsulta;
+
         DB::statement("
             EXEC sp_releaseapplock
                 @Resource = ?,
                 @LockOwner = 'Session';
-        ", ['handmais:processar_fila']);
+        ", [$resource]);
+    }
+
+    private function formatarIdsBloqueados(array $idsBloqueados): array
+    {
+        $retorno = [];
+
+        foreach ($idsBloqueados as $idConsulta => $liberaEm) {
+            $retorno[] = [
+                'id_consulta' => (int) $idConsulta,
+                'libera_em' => $liberaEm,
+            ];
+        }
+
+        return $retorno;
     }
 
     /**
