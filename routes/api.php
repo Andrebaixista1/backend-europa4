@@ -33,6 +33,9 @@ Route::get('/databases/local', [ConsultasController::class, 'local']);
 Route::get('/databases/kinghost', [ConsultasController::class, 'kinghost']);
 
 // Consultas Online
+// Logins
+Route::get('/logins/consultashandmais', [ConsultasController::class, 'handmais_login']);
+Route::get('/logins/consultasv8', [ConsultasController::class, 'v8_login']);
 
 // Hand +
 Route::post('/online/consultashandmais', [HandMaisController::class, 'handmais_online']);
