@@ -162,32 +162,25 @@ class v8Controller extends Controller
                     $saldo = $this->buscarSaldo((int) $fila->id_consulta);
 
                     if (!$saldo) {
-                        $this->salvarConsultaV8($fila, [
-                            'status' => 'ERRO_SALDO',
-                            'status_consulta_v8' => 'SALDO_NOT_FOUND',
-                            'descricao_v8' => 'Saldo V8 nao encontrado para o id_consulta informado.',
-                        ]);
-
-                        $this->removerFila((int) $fila->id);
-                        $erros[] = ['cpf' => $fila->cpf ?? null, 'erro' => 'Saldo nao encontrado'];
-                        sleep(2);
-                        continue;
+                        return response()->json([
+                            'success' => false,
+                            'message' => 'Usuario nao tem permissao de consulta ou nao tem login de API cadastrado.',
+                            'motivo' => 'NO_API_LOGIN',
+                            'id_consulta' => (int) ($fila->id_consulta ?? 0),
+                            'equipe_id' => $this->extrairInteiroPositivo($fila->equipe_id ?? null),
+                            'cpf' => $fila->cpf ?? null,
+                        ], 403);
                     }
 
                     if (!$this->equipePodeUsarSaldo($saldo->equipe_id ?? null, $fila->equipe_id ?? null)) {
-                        $this->salvarConsultaV8($fila, [
-                            'status' => 'SEM_PERMISSAO_EQUIPE',
-                            'status_consulta_v8' => 'TEAM_NOT_ALLOWED',
-                            'descricao_v8' => 'Equipe sem permissao para usar este login/token V8.',
-                        ]);
-
-                        $this->removerFila((int) $fila->id);
-                        $erros[] = [
+                        return response()->json([
+                            'success' => false,
+                            'message' => 'Usuario nao tem permissao de consulta ou nao tem login de API cadastrado.',
+                            'motivo' => 'TEAM_NOT_ALLOWED',
+                            'id_consulta' => (int) ($fila->id_consulta ?? 0),
+                            'equipe_id' => $this->extrairInteiroPositivo($fila->equipe_id ?? null),
                             'cpf' => $fila->cpf ?? null,
-                            'erro' => 'Equipe sem permissao para o id_consulta ' . (int) $fila->id_consulta,
-                        ];
-                        sleep(1);
-                        continue;
+                        ], 403);
                     }
 
                     $controleLimite = $this->validarLimitePorHora($saldo);
@@ -205,18 +198,14 @@ class v8Controller extends Controller
                     if ($controleLimite['resetado']) {
                         $saldo = $this->buscarSaldo((int) $fila->id_consulta);
                         if (!$saldo) {
-                            $this->salvarConsultaV8($fila, [
-                                'status' => 'ERRO_SALDO',
-                                'status_consulta_v8' => 'SALDO_NOT_FOUND',
-                                'descricao_v8' => 'Saldo V8 nao encontrado apos reset de 1h.',
-                            ]);
-
-                            $this->removerFila((int) $fila->id);
-                            $erros[] = [
+                            return response()->json([
+                                'success' => false,
+                                'message' => 'Usuario nao tem permissao de consulta ou nao tem login de API cadastrado.',
+                                'motivo' => 'NO_API_LOGIN_AFTER_RESET',
+                                'id_consulta' => (int) ($fila->id_consulta ?? 0),
+                                'equipe_id' => $this->extrairInteiroPositivo($fila->equipe_id ?? null),
                                 'cpf' => $fila->cpf ?? null,
-                                'erro' => 'Saldo nao encontrado apos reset de 1h.',
-                            ];
-                            continue;
+                            ], 403);
                         }
                     }
 

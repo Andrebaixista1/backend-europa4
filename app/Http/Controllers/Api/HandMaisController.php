@@ -156,47 +156,25 @@ class HandMaisController extends Controller
                     ", [$fila->id_consulta]);
 
                     if (!$saldo) {
-                        $this->salvarResultadoSemProduto(
-                            $fila,
-                            null,
-                            'SEM_SALDO',
-                            'Token/saldo não encontrado para o id_consulta informado.'
-                        );
-
-                        DB::delete("
-                            DELETE FROM consultas_api.dbo.filaconsulta_handmais
-                            WHERE id = ?
-                        ", [$fila->id]);
-
-                        $erros[] = [
-                            'cpf' => $fila->cpf,
-                            'erro' => 'Token não encontrado'
-                        ];
-
-                        sleep(3);
-                        continue;
+                        return response()->json([
+                            'success' => false,
+                            'message' => 'Usuario nao tem permissao de consulta ou nao tem login de API cadastrado.',
+                            'motivo' => 'NO_API_LOGIN',
+                            'id_consulta' => (int) ($fila->id_consulta ?? 0),
+                            'equipe_id' => $this->extrairInteiroPositivo($fila->equipe_id ?? null),
+                            'cpf' => $fila->cpf ?? null,
+                        ], 403);
                     }
 
                     if (!$this->equipePodeUsarSaldo($saldo->equipe_id ?? null, $fila->equipe_id ?? null)) {
-                        $this->salvarResultadoSemProduto(
-                            $fila,
-                            $saldo,
-                            'SEM_PERMISSAO_EQUIPE',
-                            'Equipe sem permissao para usar este login/token HandMais.'
-                        );
-
-                        DB::delete("
-                            DELETE FROM consultas_api.dbo.filaconsulta_handmais
-                            WHERE id = ?
-                        ", [$fila->id]);
-
-                        $erros[] = [
+                        return response()->json([
+                            'success' => false,
+                            'message' => 'Usuario nao tem permissao de consulta ou nao tem login de API cadastrado.',
+                            'motivo' => 'TEAM_NOT_ALLOWED',
+                            'id_consulta' => (int) ($fila->id_consulta ?? 0),
+                            'equipe_id' => $this->extrairInteiroPositivo($fila->equipe_id ?? null),
                             'cpf' => $fila->cpf ?? null,
-                            'erro' => 'Equipe sem permissao para o id_consulta ' . (int) $fila->id_consulta,
-                        ];
-
-                        sleep(1);
-                        continue;
+                        ], 403);
                     }
 
                     $controleSaldo = $this->validarSaldoDiario($saldo);
@@ -219,24 +197,14 @@ class HandMaisController extends Controller
                         ", [$fila->id_consulta]);
 
                         if (!$saldo) {
-                            $this->salvarResultadoSemProduto(
-                                $fila,
-                                null,
-                                'SEM_SALDO',
-                                'Saldo nao encontrado apos reset de 24h.'
-                            );
-
-                            DB::delete("
-                                DELETE FROM consultas_api.dbo.filaconsulta_handmais
-                                WHERE id = ?
-                            ", [$fila->id]);
-
-                            $erros[] = [
+                            return response()->json([
+                                'success' => false,
+                                'message' => 'Usuario nao tem permissao de consulta ou nao tem login de API cadastrado.',
+                                'motivo' => 'NO_API_LOGIN_AFTER_RESET',
+                                'id_consulta' => (int) ($fila->id_consulta ?? 0),
+                                'equipe_id' => $this->extrairInteiroPositivo($fila->equipe_id ?? null),
                                 'cpf' => $fila->cpf ?? null,
-                                'erro' => 'Saldo nao encontrado apos reset de 24h.',
-                            ];
-
-                            continue;
+                            ], 403);
                         }
                     }
 
