@@ -26,6 +26,8 @@ Route::get('/teste', function() {
 Route::post('/login', [AuthController::class, 'login']);
 Route::get('/usuarios', [ConsultasController::class, 'usuarios']);
 Route::get('/equipes', [ConsultasController::class, 'equipes']);
+Route::post('/register/usuarios', [CriacaoController::class, 'novo_usuarios']);
+Route::post('/register/equipes', [CriacaoController::class, 'novo_equipes']);
 Route::get('/permissoes', [ConsultasController::class, 'permissoes']);
 Route::get('/permissoes2', [ConsultasController::class, 'permissoes2']);
 Route::patch('/permissoes/alterar', [CriacaoController::class, 'alterar_permissoes']);

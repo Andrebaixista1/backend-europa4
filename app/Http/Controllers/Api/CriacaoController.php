@@ -4,11 +4,253 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Http\Request;
+use Illuminate\Support\Str;
 use Throwable;
 
 class CriacaoController extends Controller
 {
+    public function novo_usuarios(Request $request)
+    {
+        try {
+            $nome = trim((string) $request->input('nome', ''));
+            $login = Str::lower(trim((string) $request->input('login', '')));
+            $senha = (string) $request->input('senha', '');
+            $email = trim((string) $request->input('email', ''));
+            $email = $email !== '' ? Str::lower($email) : null;
+            $roleId = $request->input('role_id');
+            $roleName = trim((string) $request->input('role', ''));
+            $equipeId = $request->input('equipe_id');
+            $equipeId = ($equipeId === null || $equipeId === '') ? null : (int) $equipeId;
+            $ativo = filter_var(
+                $request->input('ativo', true),
+                FILTER_VALIDATE_BOOLEAN,
+                FILTER_NULL_ON_FAILURE
+            );
+            $ativo = $ativo !== false;
+
+            if ($nome === '') {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Campo nome é obrigatório.'
+                ], 422);
+            }
+
+            if ($login === '') {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Campo login é obrigatório.'
+                ], 422);
+            }
+
+            if ($senha === '') {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Campo senha é obrigatório.'
+                ], 422);
+            }
+
+            if (mb_strlen($senha) < 4) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'A senha deve ter pelo menos 4 caracteres.'
+                ], 422);
+            }
+
+            if ($email !== null && !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Campo email inválido.'
+                ], 422);
+            }
+
+            $loginExists = DB::connection('sqlsrv')
+                ->table('users45')
+                ->whereRaw('LOWER(login) = ?', [$login])
+                ->exists();
+
+            if ($loginExists) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Já existe um usuário com esse login.'
+                ], 422);
+            }
+
+            if ($equipeId !== null) {
+                $equipeExists = DB::connection('sqlsrv')
+                    ->table('equipes45')
+                    ->where('id', $equipeId)
+                    ->exists();
+
+                if (!$equipeExists) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Equipe informada não foi encontrada.'
+                    ], 422);
+                }
+            }
+
+            $roleQuery = DB::connection('sqlsrv')->table('roles45');
+            if ($roleId !== null && $roleId !== '') {
+                $role = $roleQuery->where('id', (int) $roleId)->first();
+            } elseif ($roleName !== '') {
+                $normalizedRole = Str::lower(Str::ascii($roleName));
+                $role = $roleQuery
+                    ->whereRaw('LOWER(slug) = ?', [$normalizedRole])
+                    ->orWhereRaw('LOWER(nome) = ?', [$normalizedRole])
+                    ->first();
+            } else {
+                $role = $roleQuery->where('slug', 'operador')->first();
+            }
+
+            if (!$role) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Perfil informado não foi encontrado.'
+                ], 422);
+            }
+
+            DB::connection('sqlsrv')->beginTransaction();
+
+            $id = DB::connection('sqlsrv')
+                ->table('users45')
+                ->insertGetId([
+                    'nome' => $nome,
+                    'login' => $login,
+                    'email' => $email,
+                    'password' => Hash::make($senha),
+                    'equipe_id' => $equipeId,
+                    'role_id' => $role->id,
+                    'ativo' => $ativo ? 1 : 0,
+                    'last_login_at' => null,
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                    'remember_token' => Str::random(60),
+                    'email_verified_at' => null,
+                ]);
+
+            $usuario = DB::connection('sqlsrv')
+                ->table('users45')
+                ->where('id', $id)
+                ->first();
+
+            DB::connection('sqlsrv')->commit();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Usuário criado com sucesso.',
+                'data' => [
+                    'id' => $usuario->id ?? $id,
+                    'nome' => $usuario->nome ?? $nome,
+                    'login' => $usuario->login ?? $login,
+                    'email' => $usuario->email ?? $email,
+                    'equipe_id' => $usuario->equipe_id ?? $equipeId,
+                    'role_id' => $usuario->role_id ?? $role->id,
+                    'role' => $role->nome ?? null,
+                    'ativo' => (bool) ($usuario->ativo ?? $ativo),
+                    'created_at' => $usuario->created_at ?? null,
+                    'updated_at' => $usuario->updated_at ?? null,
+                ]
+            ], 201);
+        } catch (Throwable $e) {
+            if (DB::connection('sqlsrv')->transactionLevel() > 0) {
+                DB::connection('sqlsrv')->rollBack();
+            }
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Erro ao criar usuário.',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    public function novo_equipes(Request $request)
+    {
+        try {
+            $nome = trim((string) $request->input('nome', ''));
+            $descricao = trim((string) $request->input('descricao', $request->input('departamento', '')));
+            $descricao = $descricao !== '' ? $descricao : null;
+            $supervisorId = $request->input(
+                'supervisor_user_id',
+                $request->input('supervisor_id', $request->input('id_usuario'))
+            );
+            $supervisorId = ($supervisorId === null || $supervisorId === '') ? null : (int) $supervisorId;
+            $ativo = filter_var(
+                $request->input('ativo', true),
+                FILTER_VALIDATE_BOOLEAN,
+                FILTER_NULL_ON_FAILURE
+            );
+            $ativo = $ativo !== false;
+
+            if ($nome === '') {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Campo nome é obrigatório.'
+                ], 422);
+            }
+
+            if ($supervisorId !== null) {
+                $supervisorExists = DB::connection('sqlsrv')
+                    ->table('users45')
+                    ->where('id', $supervisorId)
+                    ->exists();
+
+                if (!$supervisorExists) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Supervisor informado não foi encontrado.'
+                    ], 422);
+                }
+            }
+
+            DB::connection('sqlsrv')->beginTransaction();
+
+            $id = DB::connection('sqlsrv')
+                ->table('equipes45')
+                ->insertGetId([
+                    'nome' => $nome,
+                    'descricao' => $descricao,
+                    'supervisor_user_id' => $supervisorId,
+                    'ativo' => $ativo ? 1 : 0,
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]);
+
+            $equipe = DB::connection('sqlsrv')
+                ->table('equipes45')
+                ->where('id', $id)
+                ->first();
+
+            DB::connection('sqlsrv')->commit();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Equipe criada com sucesso.',
+                'data' => [
+                    'id' => $equipe->id ?? $id,
+                    'nome' => $equipe->nome ?? $nome,
+                    'descricao' => $equipe->descricao ?? $descricao,
+                    'supervisor_user_id' => $equipe->supervisor_user_id ?? $supervisorId,
+                    'ativo' => (bool) ($equipe->ativo ?? $ativo),
+                    'created_at' => $equipe->created_at ?? null,
+                    'updated_at' => $equipe->updated_at ?? null,
+                ]
+            ], 201);
+        } catch (Throwable $e) {
+            if (DB::connection('sqlsrv')->transactionLevel() > 0) {
+                DB::connection('sqlsrv')->rollBack();
+            }
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Erro ao criar equipe.',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
     public function handmais_cadastro(Request $request)
     {
         try {
