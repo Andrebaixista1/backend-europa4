@@ -30,6 +30,7 @@ Route::post('/register/usuarios', [CriacaoController::class, 'novo_usuarios']);
 Route::post('/register/equipes', [CriacaoController::class, 'novo_equipes']);
 Route::patch('/alter/passuser', [CriacaoController::class, 'alterar_senha']);
 Route::patch('/alter/equipe', [CriacaoController::class, 'alterar_equipe']);
+Route::patch('/alter/status-user', [CriacaoController::class, 'alterar_status']);
 Route::get('/permissoes', [ConsultasController::class, 'permissoes']);
 Route::get('/permissoes2', [ConsultasController::class, 'permissoes2']);
 Route::patch('/permissoes/alterar', [CriacaoController::class, 'alterar_permissoes']);

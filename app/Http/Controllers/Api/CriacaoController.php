@@ -413,6 +413,82 @@ class CriacaoController extends Controller
         }
     }
 
+    public function alterar_status(Request $request)
+    {
+        try {
+            $userId = $request->input('id_usuario', $request->input('id'));
+            $ativo = $request->input('ativo', $request->input('status'));
+
+            if ($userId === null || $userId === '') {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Campo id é obrigatório.'
+                ], 422);
+            }
+
+            if ($ativo === null || $ativo === '') {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Campo ativo é obrigatório.'
+                ], 422);
+            }
+
+            if (is_string($ativo)) {
+                $token = Str::lower(trim($ativo));
+                if (in_array($token, ['ativo', '1', 'true', 'sim', 'yes', 'on'], true)) {
+                    $ativo = true;
+                } elseif (in_array($token, ['inativo', '0', 'false', 'nao', 'não', 'no', 'off'], true)) {
+                    $ativo = false;
+                }
+            }
+
+            $ativo = filter_var($ativo, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
+
+            if ($ativo === null) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Valor de ativo inválido.'
+                ], 422);
+            }
+
+            $usuario = DB::connection('sqlsrv')
+                ->table('users45')
+                ->where('id', (int) $userId)
+                ->first();
+
+            if (!$usuario) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Usuário não encontrado.'
+                ], 404);
+            }
+
+            DB::connection('sqlsrv')
+                ->table('users45')
+                ->where('id', (int) $userId)
+                ->update([
+                    'ativo' => $ativo ? 1 : 0,
+                    'updated_at' => now(),
+                ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => $ativo ? 'Usuário ativado com sucesso.' : 'Usuário desativado com sucesso.',
+                'data' => [
+                    'id' => (int) $usuario->id,
+                    'login' => $usuario->login ?? null,
+                    'ativo' => $ativo,
+                ]
+            ]);
+        } catch (Throwable $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Erro ao alterar status.',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
     public function handmais_cadastro(Request $request)
     {
         try {
