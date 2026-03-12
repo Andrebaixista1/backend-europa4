@@ -345,6 +345,74 @@ class CriacaoController extends Controller
         }
     }
 
+    public function alterar_equipe(Request $request)
+    {
+        try {
+            $userId = $request->input('id_usuario', $request->input('id'));
+            $equipeId = $request->input('equipe_id');
+            $equipeId = ($equipeId === null || $equipeId === '') ? null : (int) $equipeId;
+
+            if ($userId === null || $userId === '') {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Campo id_usuario é obrigatório.'
+                ], 422);
+            }
+
+            $usuario = DB::connection('sqlsrv')
+                ->table('users45')
+                ->where('id', (int) $userId)
+                ->first();
+
+            if (!$usuario) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Usuário não encontrado.'
+                ], 404);
+            }
+
+            $equipe = null;
+            if ($equipeId !== null) {
+                $equipe = DB::connection('sqlsrv')
+                    ->table('equipes45')
+                    ->where('id', $equipeId)
+                    ->first();
+
+                if (!$equipe) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Equipe informada não foi encontrada.'
+                    ], 422);
+                }
+            }
+
+            DB::connection('sqlsrv')
+                ->table('users45')
+                ->where('id', (int) $userId)
+                ->update([
+                    'equipe_id' => $equipeId,
+                    'updated_at' => now(),
+                ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => $equipeId === null ? 'Usuário desvinculado da equipe com sucesso.' : 'Equipe do usuário alterada com sucesso.',
+                'data' => [
+                    'id' => (int) $usuario->id,
+                    'login' => $usuario->login ?? null,
+                    'equipe_id' => $equipeId,
+                    'equipe_nome' => $equipe->nome ?? null,
+                ]
+            ]);
+        } catch (Throwable $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Erro ao alterar equipe.',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
     public function handmais_cadastro(Request $request)
     {
         try {
