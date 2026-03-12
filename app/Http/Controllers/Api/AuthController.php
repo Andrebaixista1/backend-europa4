@@ -51,6 +51,10 @@ class AuthController extends Controller
             ], 403);
         }
 
+        $user['data_ultimo_login'] = $this->touchLastLogin(
+            (int) ($user['id'] ?? $user['id_user'] ?? 0)
+        );
+
         return response()->json([
             'message' => 'Login realizado com sucesso.',
             'user' => $this->publicUser($user),
@@ -374,5 +378,24 @@ SQL;
         unset($user['password_hash']);
 
         return $user;
+    }
+
+    private function touchLastLogin(int $userId): mixed
+    {
+        if ($userId <= 0) {
+            return null;
+        }
+
+        DB::connection('sqlsrv')
+            ->table('users45')
+            ->where('id', $userId)
+            ->update([
+                'last_login_at' => DB::raw('SYSDATETIME()'),
+            ]);
+
+        return DB::connection('sqlsrv')
+            ->table('users45')
+            ->where('id', $userId)
+            ->value('last_login_at');
     }
 }
