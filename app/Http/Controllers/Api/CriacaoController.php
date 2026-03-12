@@ -251,6 +251,100 @@ class CriacaoController extends Controller
         }
     }
 
+    public function alterar_senha(Request $request)
+    {
+        try {
+            $userId = $request->input('id');
+            $senhaAtual = (string) $request->input('senha_atual', '');
+            $senhaNova = (string) $request->input('senha_nova', $request->input('senha', ''));
+            $confirmacao = (string) $request->input('confirmacao', '');
+
+            if ($userId === null || $userId === '') {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Campo id é obrigatório.'
+                ], 422);
+            }
+
+            if ($senhaAtual === '') {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Campo senha_atual é obrigatório.'
+                ], 422);
+            }
+
+            if ($senhaNova === '') {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Campo senha_nova é obrigatório.'
+                ], 422);
+            }
+
+            if (mb_strlen($senhaNova) < 4) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'A nova senha deve ter pelo menos 4 caracteres.'
+                ], 422);
+            }
+
+            if ($confirmacao === '') {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Campo confirmacao é obrigatório.'
+                ], 422);
+            }
+
+            if ($senhaNova !== $confirmacao) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'A confirmação da senha não confere.'
+                ], 422);
+            }
+
+            $usuario = DB::connection('sqlsrv')
+                ->table('users45')
+                ->where('id', (int) $userId)
+                ->first();
+
+            if (!$usuario) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Usuário não encontrado.'
+                ], 404);
+            }
+
+            if (!Hash::check($senhaAtual, (string) ($usuario->password ?? ''))) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Senha atual inválida.'
+                ], 422);
+            }
+
+            DB::connection('sqlsrv')
+                ->table('users45')
+                ->where('id', (int) $userId)
+                ->update([
+                    'password' => Hash::make($senhaNova),
+                    'updated_at' => now(),
+                ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Senha atualizada com sucesso.',
+                'data' => [
+                    'id' => (int) $usuario->id,
+                    'login' => $usuario->login ?? null,
+                ]
+            ]);
+        } catch (Throwable $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Erro ao alterar senha.',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
     public function handmais_cadastro(Request $request)
     {
         try {
