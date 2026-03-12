@@ -27,6 +27,7 @@ Route::post('/login', [AuthController::class, 'login']);
 Route::get('/usuarios', [ConsultasController::class, 'usuarios']);
 Route::get('/equipes', [ConsultasController::class, 'equipes']);
 Route::get('/permissoes', [ConsultasController::class, 'permissoes']);
+Route::get('/permissoes2', [ConsultasController::class, 'permissoes2']);
 
 // Get para verificar bancos de dados
 Route::get('/databases/hostinger', [ConsultasController::class, 'hostinger']);

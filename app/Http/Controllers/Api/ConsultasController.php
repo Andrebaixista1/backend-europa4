@@ -210,6 +210,188 @@ class ConsultasController extends Controller
         }
     }
 
+    public function permissoes2()
+    {
+        try {
+            $sql = "
+            DECLARE @sql NVARCHAR(MAX) = N'
+            ;WITH role_perm_agg AS (
+                SELECT
+                    rp.role_id,
+                    rp.permission_id,
+                    MAX(CAST(rp.allowed AS INT)) AS allowed
+                FROM [europa4].[dbo].[role_permissions45] rp
+                GROUP BY rp.role_id, rp.permission_id
+            ),
+            role_permissions_json AS (
+                SELECT
+                    r.id AS role_id,
+                    JSON_QUERY(COALESCE((
+                        SELECT
+                            p.id,
+                            p.nome,
+                            p.slug,
+                            p.modulo,
+                            p.descricao,
+                            CAST(ISNULL(rpa.allowed, 0) AS bit) AS allowed
+                        FROM [europa4].[dbo].[permissions45] p
+                        LEFT JOIN role_perm_agg rpa
+                            ON rpa.role_id = r.id
+                        AND rpa.permission_id = p.id
+                        ORDER BY p.modulo, p.slug
+                        FOR JSON PATH
+                    ), ''[]'')) AS permissoes_sistema_json,
+                    COALESCE((
+                        SELECT STUFF((
+                            SELECT '','' + p.slug
+                            FROM [europa4].[dbo].[permissions45] p
+                            LEFT JOIN role_perm_agg rpa
+                                ON rpa.role_id = r.id
+                            AND rpa.permission_id = p.id
+                            WHERE ISNULL(rpa.allowed, 0) = 1
+                            ORDER BY p.modulo, p.slug
+                            FOR XML PATH(''''), TYPE
+                        ).value(''.'', ''NVARCHAR(MAX)''), 1, 1, '''')
+                    ), '''') AS permissoes_sistema
+                FROM [europa4].[dbo].[roles45] r
+            ),
+            regras_role_paginas AS (
+                SELECT
+                    r.id AS role_id,
+                    c.pagina_key,
+                    c.pagina_nome,
+                    c.rota,
+                    MAX(CAST(ISNULL(rp.allow_view, 0) AS INT))       AS allow_view,
+                    MAX(CAST(ISNULL(rp.allow_consultar, 0) AS INT))  AS allow_consultar,
+                    MAX(CAST(ISNULL(rp.allow_criar, 0) AS INT))      AS allow_criar,
+                    MAX(CAST(ISNULL(rp.allow_editar, 0) AS INT))     AS allow_editar,
+                    MAX(CAST(ISNULL(rp.allow_excluir, 0) AS INT))    AS allow_excluir,
+                    MAX(CAST(ISNULL(rp.allow_exportar, 0) AS INT))   AS allow_exportar
+                FROM [europa4].[dbo].[roles45] r
+                INNER JOIN [europa4].[dbo].[permissoes_regras] pr
+                    ON pr.ativo = 1
+                AND (
+                        pr.role_alvo = r.slug
+                        -- Se role_alvo guardar o ID da role, troque por:
+                        -- OR TRY_CONVERT(INT, pr.role_alvo) = r.id
+
+                        -- Se role_alvo guardar o NOME da role, troque por:
+                        -- OR pr.role_alvo = r.nome
+                )
+                INNER JOIN [europa4].[dbo].[permissoes_regra_paginas] rp
+                    ON rp.regra_id = pr.id
+                INNER JOIN [europa4].[dbo].[permissoes_paginas_catalogo] c
+                    ON c.pagina_key = rp.pagina_key
+                AND c.ativo = 1
+                GROUP BY
+                    r.id,
+                    c.pagina_key,
+                    c.pagina_nome,
+                    c.rota
+            ),
+            role_pages_json AS (
+                SELECT
+                    r.id AS role_id,
+                    JSON_QUERY(COALESCE((
+                        SELECT
+                            c.pagina_key,
+                            c.pagina_nome,
+                            c.rota,
+                            CAST(
+                                CASE
+                                    WHEN ISNULL(rrp.allow_view, 0) = 1 THEN 1
+                                    ELSE 0
+                                END
+                            AS bit) AS allow_view,
+                            CAST(
+                                CASE
+                                    WHEN c.suporta_consultar = 1 AND ISNULL(rrp.allow_consultar, 0) = 1 THEN 1
+                                    ELSE 0
+                                END
+                            AS bit) AS allow_consultar,
+                            CAST(
+                                CASE
+                                    WHEN c.suporta_criar = 1 AND ISNULL(rrp.allow_criar, 0) = 1 THEN 1
+                                    ELSE 0
+                                END
+                            AS bit) AS allow_criar,
+                            CAST(
+                                CASE
+                                    WHEN c.suporta_editar = 1 AND ISNULL(rrp.allow_editar, 0) = 1 THEN 1
+                                    ELSE 0
+                                END
+                            AS bit) AS allow_editar,
+                            CAST(
+                                CASE
+                                    WHEN c.suporta_excluir = 1 AND ISNULL(rrp.allow_excluir, 0) = 1 THEN 1
+                                    ELSE 0
+                                END
+                            AS bit) AS allow_excluir,
+                            CAST(
+                                CASE
+                                    WHEN c.suporta_exportar = 1 AND ISNULL(rrp.allow_exportar, 0) = 1 THEN 1
+                                    ELSE 0
+                                END
+                            AS bit) AS allow_exportar
+                        FROM [europa4].[dbo].[permissoes_paginas_catalogo] c
+                        LEFT JOIN regras_role_paginas rrp
+                            ON rrp.role_id = r.id
+                        AND rrp.pagina_key = c.pagina_key
+                        WHERE c.ativo = 1
+                        ORDER BY c.pagina_nome
+                        FOR JSON PATH
+                    ), ''[]'')) AS paginas_permissoes_json
+                FROM [europa4].[dbo].[roles45] r
+            )
+            SELECT COALESCE((
+                SELECT
+                    r.id,
+                    r.nome,
+                    r.slug,
+                    r.nivel,
+                    CAST(ISNULL(r.is_system, 0) AS bit) AS is_system,
+                    r.created_at,
+                    r.updated_at,
+                    ISNULL(rps.permissoes_sistema, '''') AS permissoes_sistema,
+                    JSON_QUERY(ISNULL(rps.permissoes_sistema_json, ''[]'')) AS permissoes_sistema_json,
+                    JSON_QUERY(ISNULL(rpj.paginas_permissoes_json, ''[]'')) AS paginas_permissoes_json
+                FROM [europa4].[dbo].[roles45] r
+                LEFT JOIN role_permissions_json rps
+                    ON rps.role_id = r.id
+                LEFT JOIN role_pages_json rpj
+                    ON rpj.role_id = r.id
+                ORDER BY r.nivel, r.nome
+                FOR JSON PATH
+            ), ''[]'') AS payload;
+            ';
+
+            EXEC sp_executesql @sql;
+        ";
+
+            $result = DB::connection('sqlsrv')->selectOne($sql);
+
+            $payload = is_object($result) ? ($result->payload ?? '[]') : '[]';
+
+            if (!mb_check_encoding($payload, 'UTF-8')) {
+                $payload = mb_convert_encoding($payload, 'UTF-8', 'Windows-1252');
+            }
+
+            $permissoes = json_decode($payload, true);
+
+            return response()->json([
+                'success' => true,
+                'total' => count($permissoes ?? []),
+                'data' => $permissoes ?? [],
+            ]);
+        } catch (Throwable $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Erro ao buscar usuários',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
     public function hostinger()
     {
         try {
@@ -406,6 +588,4 @@ class ConsultasController extends Controller
             ], 500);
         }
     }
-
-    
 }
