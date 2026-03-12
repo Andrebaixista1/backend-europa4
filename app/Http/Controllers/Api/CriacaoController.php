@@ -489,6 +489,185 @@ class CriacaoController extends Controller
         }
     }
 
+    public function alterar_usuario(Request $request)
+    {
+        try {
+            $userId = $request->input('id_usuario', $request->input('id'));
+            $nome = trim((string) $request->input('nome', ''));
+            $login = Str::lower(trim((string) $request->input('login', '')));
+            $roleId = $request->input('role_id');
+            $roleName = trim((string) $request->input('role', $request->input('tipo', '')));
+            $roleNivel = $request->input('hierarquia', $request->input('nivel'));
+            $ativoInput = $request->input('ativo', $request->input('status'));
+
+            if ($userId === null || $userId === '') {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Campo id e obrigatorio.'
+                ], 422);
+            }
+
+            if ($nome === '') {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Campo nome e obrigatorio.'
+                ], 422);
+            }
+
+            if ($login === '') {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Campo login e obrigatorio.'
+                ], 422);
+            }
+
+            $usuario = DB::connection('sqlsrv')
+                ->table('users45')
+                ->where('id', (int) $userId)
+                ->first();
+
+            if (!$usuario) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Usuario nao encontrado.'
+                ], 404);
+            }
+
+            $loginExists = DB::connection('sqlsrv')
+                ->table('users45')
+                ->whereRaw('LOWER(login) = ?', [$login])
+                ->where('id', '<>', (int) $userId)
+                ->exists();
+
+            if ($loginExists) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Ja existe um usuario com esse login.'
+                ], 422);
+            }
+
+            $role = $this->resolverRole(
+                $roleId,
+                $roleName,
+                $roleNivel
+            );
+
+            if (!$role) {
+                $role = DB::connection('sqlsrv')
+                    ->table('roles45')
+                    ->where('id', (int) ($usuario->role_id ?? 0))
+                    ->first();
+            }
+
+            if (!$role) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Perfil informado nao foi encontrado.'
+                ], 422);
+            }
+
+            $ativo = $ativoInput;
+            if ($ativo === null || $ativo === '') {
+                $ativo = (bool) ($usuario->ativo ?? false);
+            } else {
+                $ativo = $this->normalizarAtivo($ativoInput);
+            }
+
+            if ($ativo === null) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Valor de ativo invalido.'
+                ], 422);
+            }
+
+            DB::connection('sqlsrv')
+                ->table('users45')
+                ->where('id', (int) $userId)
+                ->update([
+                    'nome' => $nome,
+                    'login' => $login,
+                    'role_id' => (int) $role->id,
+                    'ativo' => $ativo ? 1 : 0,
+                    'updated_at' => now(),
+                ]);
+
+            $usuarioAtualizado = DB::connection('sqlsrv')
+                ->table('users45')
+                ->where('id', (int) $userId)
+                ->first();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Usuario atualizado com sucesso.',
+                'data' => [
+                    'id' => (int) ($usuarioAtualizado->id ?? $userId),
+                    'nome' => $usuarioAtualizado->nome ?? $nome,
+                    'login' => $usuarioAtualizado->login ?? $login,
+                    'role_id' => (int) ($usuarioAtualizado->role_id ?? $role->id),
+                    'role' => $role->nome ?? null,
+                    'role_nome' => $role->nome ?? null,
+                    'role_slug' => $role->slug ?? null,
+                    'hierarquia' => isset($role->nivel) ? (int) $role->nivel : null,
+                    'ativo' => (bool) ($usuarioAtualizado->ativo ?? $ativo),
+                    'status' => (($usuarioAtualizado->ativo ?? $ativo) ? 'Ativo' : 'Inativo'),
+                    'updated_at' => $usuarioAtualizado->updated_at ?? null,
+                ]
+            ]);
+        } catch (Throwable $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Erro ao atualizar usuario.',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    private function resolverRole($roleId = null, string $roleName = '', $roleNivel = null): mixed
+    {
+        if ($roleId !== null && $roleId !== '') {
+            return DB::connection('sqlsrv')
+                ->table('roles45')
+                ->where('id', (int) $roleId)
+                ->first();
+        }
+
+        if ($roleNivel !== null && $roleNivel !== '') {
+            return DB::connection('sqlsrv')
+                ->table('roles45')
+                ->where('nivel', (int) $roleNivel)
+                ->first();
+        }
+
+        if ($roleName !== '') {
+            $normalizedRole = Str::lower(trim(Str::ascii($roleName)));
+
+            return DB::connection('sqlsrv')
+                ->table('roles45')
+                ->whereRaw('LOWER(slug) = ?', [$normalizedRole])
+                ->orWhereRaw('LOWER(nome) = ?', [$normalizedRole])
+                ->first();
+        }
+
+        return null;
+    }
+
+    private function normalizarAtivo($ativo): ?bool
+    {
+        if (is_string($ativo)) {
+            $token = Str::lower(trim(Str::ascii($ativo)));
+
+            if (in_array($token, ['ativo', '1', 'true', 'sim', 'yes', 'on'], true)) {
+                return true;
+            }
+
+            if (in_array($token, ['inativo', '0', 'false', 'nao', 'no', 'off'], true)) {
+                return false;
+            }
+        }
+
+        return filter_var($ativo, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
+    }
+
     public function handmais_cadastro(Request $request)
     {
         try {
