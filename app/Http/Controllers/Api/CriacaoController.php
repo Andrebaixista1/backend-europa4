@@ -338,35 +338,6 @@ class CriacaoController extends Controller
                         @agora
                     );
 
-                ;WITH pagina_role_permissions_map AS (
-                    SELECT
-                        v.[pagina_key],
-                        v.[modulo]
-                    FROM (VALUES
-                        (N'dashboard', N'dashboard'),
-                        (N'usuarios', N'users'),
-                        (N'equipes', N'equipes'),
-                        (N'permissoes', N'config'),
-                        (N'consultas_clientes', N'consulta_cliente'),
-                        (N'consultas_presenca', N'consulta_presenca'),
-                        (N'consultas_v8', N'consulta_v8')
-                    ) v ([pagina_key], [modulo])
-                )
-                UPDATE rp
-                SET
-                    rp.allowed = 0,
-                    rp.updated_at = @agora
-                FROM [europa4].[dbo].[role_permissions45] rp
-                INNER JOIN [europa4].[dbo].[permissions45] p
-                    ON p.id = rp.permission_id
-                INNER JOIN pagina_role_permissions_map map
-                    ON map.modulo = p.modulo
-                INNER JOIN @src_paginas src
-                    ON src.pagina_key = map.pagina_key
-                WHERE rp.role_id = @role_id
-                  AND src.allow_view = 0
-                  AND ISNULL(rp.allowed, 0) <> 0;
-
                 SELECT
                     @role_id AS role_id,
                     @regra_id AS regra_id,
@@ -374,6 +345,57 @@ class CriacaoController extends Controller
             ";
 
                 $result = DB::connection('sqlsrv')->selectOne($sql, [$payload]);
+
+                $legacyPermissionModulesByPage = [
+                    'dashboard' => 'dashboard',
+                    'usuarios' => 'users',
+                    'equipes' => 'equipes',
+                    'permissoes' => 'config',
+                    'consultas_clientes' => 'consulta_cliente',
+                    'consultas_presenca' => 'consulta_presenca',
+                    'consultas_v8' => 'consulta_v8',
+                ];
+
+                $disabledModules = [];
+                foreach (($payloadArray['paginas_permissoes_json'] ?? []) as $pagePermission) {
+                    $pageKey = trim((string) ($pagePermission['pagina_key'] ?? ''));
+                    if ($pageKey === '' || !array_key_exists($pageKey, $legacyPermissionModulesByPage)) {
+                        continue;
+                    }
+
+                    $allowView = filter_var(
+                        $pagePermission['allow_view'] ?? false,
+                        FILTER_VALIDATE_BOOLEAN,
+                        FILTER_NULL_ON_FAILURE
+                    );
+
+                    if ($allowView === true) {
+                        continue;
+                    }
+
+                    $disabledModules[$legacyPermissionModulesByPage[$pageKey]] = true;
+                }
+
+                if (!empty($disabledModules)) {
+                    $modulePlaceholders = implode(', ', array_fill(0, count($disabledModules), '?'));
+                    $bindings = array_merge([(int) $payloadArray['role_id']], array_keys($disabledModules));
+
+                    DB::connection('sqlsrv')->update(
+                        "
+                        UPDATE rp
+                        SET
+                            rp.allowed = 0,
+                            rp.updated_at = SYSDATETIME()
+                        FROM [europa4].[dbo].[role_permissions45] rp
+                        INNER JOIN [europa4].[dbo].[permissions45] p
+                            ON p.id = rp.permission_id
+                        WHERE rp.role_id = ?
+                          AND p.modulo IN ($modulePlaceholders)
+                          AND ISNULL(rp.allowed, 0) <> 0
+                        ",
+                        $bindings
+                    );
+                }
 
                 DB::connection('sqlsrv')->commit();
 
