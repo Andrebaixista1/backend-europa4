@@ -165,6 +165,15 @@ class CriacaoController extends Controller
                 DECLARE @role_nome NVARCHAR(255);
                 DECLARE @regra_id INT;
                 DECLARE @agora DATETIME2(0) = SYSDATETIME();
+                DECLARE @src_paginas TABLE (
+                    [pagina_key] NVARCHAR(200) NOT NULL,
+                    [allow_view] bit NOT NULL,
+                    [allow_consultar] bit NOT NULL,
+                    [allow_criar] bit NOT NULL,
+                    [allow_editar] bit NOT NULL,
+                    [allow_excluir] bit NOT NULL,
+                    [allow_exportar] bit NOT NULL
+                );
 
                 IF @role_id IS NULL
                     THROW 50001, 'role_id inválido ou não informado.', 1;
@@ -258,29 +267,38 @@ class CriacaoController extends Controller
                         @agora
                     );
 
-                ;WITH src_paginas AS (
-                    SELECT
-                        j.[pagina_key],
-                        CAST(ISNULL(j.[allow_view], 0) AS bit) AS allow_view,
-                        CAST(ISNULL(j.[allow_consultar], 0) AS bit) AS allow_consultar,
-                        CAST(ISNULL(j.[allow_criar], 0) AS bit) AS allow_criar,
-                        CAST(ISNULL(j.[allow_editar], 0) AS bit) AS allow_editar,
-                        CAST(ISNULL(j.[allow_excluir], 0) AS bit) AS allow_excluir,
-                        CAST(ISNULL(j.[allow_exportar], 0) AS bit) AS allow_exportar
-                    FROM OPENJSON(@payload, '$.paginas_permissoes_json')
-                    WITH (
-                        [pagina_key] NVARCHAR(200) '$.pagina_key',
-                        [allow_view] bit '$.allow_view',
-                        [allow_consultar] bit '$.allow_consultar',
-                        [allow_criar] bit '$.allow_criar',
-                        [allow_editar] bit '$.allow_editar',
-                        [allow_excluir] bit '$.allow_excluir',
-                        [allow_exportar] bit '$.allow_exportar'
-                    ) j
-                    WHERE j.[pagina_key] IS NOT NULL
+                INSERT INTO @src_paginas
+                (
+                    [pagina_key],
+                    [allow_view],
+                    [allow_consultar],
+                    [allow_criar],
+                    [allow_editar],
+                    [allow_excluir],
+                    [allow_exportar]
                 )
+                SELECT
+                    j.[pagina_key],
+                    CAST(ISNULL(j.[allow_view], 0) AS bit) AS allow_view,
+                    CAST(ISNULL(j.[allow_consultar], 0) AS bit) AS allow_consultar,
+                    CAST(ISNULL(j.[allow_criar], 0) AS bit) AS allow_criar,
+                    CAST(ISNULL(j.[allow_editar], 0) AS bit) AS allow_editar,
+                    CAST(ISNULL(j.[allow_excluir], 0) AS bit) AS allow_excluir,
+                    CAST(ISNULL(j.[allow_exportar], 0) AS bit) AS allow_exportar
+                FROM OPENJSON(@payload, '$.paginas_permissoes_json')
+                WITH (
+                    [pagina_key] NVARCHAR(200) '$.pagina_key',
+                    [allow_view] bit '$.allow_view',
+                    [allow_consultar] bit '$.allow_consultar',
+                    [allow_criar] bit '$.allow_criar',
+                    [allow_editar] bit '$.allow_editar',
+                    [allow_excluir] bit '$.allow_excluir',
+                    [allow_exportar] bit '$.allow_exportar'
+                ) j
+                WHERE j.[pagina_key] IS NOT NULL;
+
                 MERGE [europa4].[dbo].[permissoes_regra_paginas] AS tgt
-                USING src_paginas AS src
+                USING @src_paginas AS src
                     ON tgt.regra_id = @regra_id
                    AND tgt.pagina_key = src.pagina_key
                 WHEN MATCHED THEN
@@ -319,6 +337,35 @@ class CriacaoController extends Controller
                         @agora,
                         @agora
                     );
+
+                ;WITH pagina_role_permissions_map AS (
+                    SELECT
+                        v.[pagina_key],
+                        v.[modulo]
+                    FROM (VALUES
+                        (N'dashboard', N'dashboard'),
+                        (N'usuarios', N'users'),
+                        (N'equipes', N'equipes'),
+                        (N'permissoes', N'config'),
+                        (N'consultas_clientes', N'consulta_cliente'),
+                        (N'consultas_presenca', N'consulta_presenca'),
+                        (N'consultas_v8', N'consulta_v8')
+                    ) v ([pagina_key], [modulo])
+                )
+                UPDATE rp
+                SET
+                    rp.allowed = 0,
+                    rp.updated_at = @agora
+                FROM [europa4].[dbo].[role_permissions45] rp
+                INNER JOIN [europa4].[dbo].[permissions45] p
+                    ON p.id = rp.permission_id
+                INNER JOIN pagina_role_permissions_map map
+                    ON map.modulo = p.modulo
+                INNER JOIN @src_paginas src
+                    ON src.pagina_key = map.pagina_key
+                WHERE rp.role_id = @role_id
+                  AND src.allow_view = 0
+                  AND ISNULL(rp.allowed, 0) <> 0;
 
                 SELECT
                     @role_id AS role_id,
