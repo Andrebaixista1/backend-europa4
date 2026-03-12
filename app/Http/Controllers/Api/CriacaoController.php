@@ -891,6 +891,96 @@ class CriacaoController extends Controller
         return filter_var($ativo, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
     }
 
+    public function excluir_usuario(Request $request)
+    {
+        $connection = DB::connection('sqlsrv');
+
+        try {
+            $userId = $request->input('id_usuario', $request->input('user_id', $request->input('id')));
+
+            if ($userId === null || $userId === '') {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Campo id e obrigatorio.'
+                ], 422);
+            }
+
+            $user = $connection
+                ->table('users45')
+                ->where('id', (int) $userId)
+                ->first();
+
+            if (!$user) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Usuario nao encontrado.'
+                ], 404);
+            }
+
+            // Evita remover o ultimo master do sistema.
+            $isMaster = ((int) ($user->role_id ?? 0)) === 1;
+            if ($isMaster) {
+                $mastersAtivos = $connection
+                    ->table('users45')
+                    ->where('role_id', 1)
+                    ->where('id', '<>', (int) $userId)
+                    ->count();
+
+                if ($mastersAtivos === 0) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Nao e possivel remover o ultimo usuario Master.'
+                    ], 422);
+                }
+            }
+
+            $connection->beginTransaction();
+
+            // Limpa supervisao de equipes vinculadas
+            $connection
+                ->table('equipes45')
+                ->where('supervisor_user_id', (int) $userId)
+                ->update([
+                    'supervisor_user_id' => null,
+                    'updated_at' => now(),
+                ]);
+
+            // Remove permissoes individuais
+            $connection
+                ->table('user_permissions45')
+                ->where('user_id', (int) $userId)
+                ->delete();
+
+            // Remove usuario
+            $connection
+                ->table('users45')
+                ->where('id', (int) $userId)
+                ->delete();
+
+            $connection->commit();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Usuario excluido com sucesso.',
+                'data' => [
+                    'id' => (int) $userId,
+                    'login' => $user->login ?? null,
+                    'role_id' => (int) ($user->role_id ?? 0),
+                ]
+            ]);
+        } catch (Throwable $e) {
+            if ($connection->transactionLevel() > 0) {
+                $connection->rollBack();
+            }
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Erro ao excluir usuario.',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
     public function handmais_cadastro(Request $request)
     {
         try {
