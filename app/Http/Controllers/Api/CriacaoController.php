@@ -622,6 +622,229 @@ class CriacaoController extends Controller
         }
     }
 
+    public function alterar_dados_equipe(Request $request)
+    {
+        try {
+            $equipeId = $request->input('equipe_id', $request->input('id'));
+            $nome = trim((string) $request->input('nome', ''));
+            $descricaoInput = $request->input('descricao', $request->input('departamento'));
+            $descricao = trim((string) ($descricaoInput ?? ''));
+            $descricao = $descricao === '' ? null : $descricao;
+            $supervisorId = $request->input(
+                'supervisor_user_id',
+                $request->input('supervisor_id', $request->input('id_usuario'))
+            );
+            $supervisorId = ($supervisorId === null || $supervisorId === '') ? null : (int) $supervisorId;
+            $ativoInput = $request->input('ativo');
+
+            if ($equipeId === null || $equipeId === '') {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Campo equipe_id e obrigatorio.'
+                ], 422);
+            }
+
+            $equipe = DB::connection('sqlsrv')
+                ->table('equipes45')
+                ->where('id', (int) $equipeId)
+                ->first();
+
+            if (!$equipe) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Equipe nao encontrada.'
+                ], 404);
+            }
+
+            if ($nome === '') {
+                $nome = trim((string) ($equipe->nome ?? ''));
+            }
+
+            if ($nome === '') {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Campo nome e obrigatorio.'
+                ], 422);
+            }
+
+            if ($supervisorId !== null) {
+                $supervisorExiste = DB::connection('sqlsrv')
+                    ->table('users45')
+                    ->where('id', $supervisorId)
+                    ->exists();
+
+                if (!$supervisorExiste) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Supervisor informado nao foi encontrado.'
+                    ], 422);
+                }
+            }
+
+            $ativo = $ativoInput;
+            if ($ativo === null || $ativo === '') {
+                $ativo = (bool) ($equipe->ativo ?? false);
+            } else {
+                $ativo = $this->normalizarAtivo($ativoInput);
+            }
+
+            if ($ativo === null) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Valor de ativo invalido.'
+                ], 422);
+            }
+
+            DB::connection('sqlsrv')
+                ->table('equipes45')
+                ->where('id', (int) $equipeId)
+                ->update([
+                    'nome' => $nome,
+                    'descricao' => $descricao,
+                    'supervisor_user_id' => $supervisorId,
+                    'ativo' => $ativo ? 1 : 0,
+                    'updated_at' => now(),
+                ]);
+
+            $equipeAtualizada = DB::connection('sqlsrv')
+                ->table('equipes45')
+                ->where('id', (int) $equipeId)
+                ->first();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Equipe atualizada com sucesso.',
+                'data' => [
+                    'id' => (int) ($equipeAtualizada->id ?? $equipeId),
+                    'nome' => $equipeAtualizada->nome ?? $nome,
+                    'descricao' => $equipeAtualizada->descricao ?? $descricao,
+                    'supervisor_user_id' => $equipeAtualizada->supervisor_user_id ?? $supervisorId,
+                    'ativo' => (bool) ($equipeAtualizada->ativo ?? $ativo),
+                    'updated_at' => $equipeAtualizada->updated_at ?? null,
+                ]
+            ]);
+        } catch (Throwable $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Erro ao atualizar equipe.',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    public function excluir_equipe(Request $request)
+    {
+        $connection = DB::connection('sqlsrv');
+
+        try {
+            $equipeId = $request->input('equipe_id', $request->input('id'));
+            $acaoMembros = Str::lower(trim(Str::ascii((string) $request->input(
+                'acao_membros',
+                $request->input('membros_acao', $request->input('acao', ''))
+            ))));
+
+            if ($equipeId === null || $equipeId === '') {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Campo equipe_id e obrigatorio.'
+                ], 422);
+            }
+
+            $equipe = $connection
+                ->table('equipes45')
+                ->where('id', (int) $equipeId)
+                ->first();
+
+            if (!$equipe) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Equipe nao encontrada.'
+                ], 404);
+            }
+
+            $membros = $connection
+                ->table('users45')
+                ->select('id')
+                ->where('equipe_id', (int) $equipeId)
+                ->get();
+
+            $memberIds = $membros->pluck('id')->map(fn ($id) => (int) $id)->all();
+            $memberCount = count($memberIds);
+
+            if ($memberCount > 0 && !in_array($acaoMembros, ['desvincular', 'excluir'], true)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Escolha o tratamento dos membros antes de excluir a equipe.',
+                    'data' => [
+                        'equipe_id' => (int) $equipeId,
+                        'membros_afetados' => $memberCount,
+                        'acoes_permitidas' => ['desvincular', 'excluir'],
+                    ]
+                ], 422);
+            }
+
+            $connection->beginTransaction();
+
+            if ($memberCount > 0 && $acaoMembros === 'desvincular') {
+                $connection
+                    ->table('users45')
+                    ->where('equipe_id', (int) $equipeId)
+                    ->update([
+                        'equipe_id' => null,
+                        'updated_at' => now(),
+                    ]);
+            }
+
+            if ($memberCount > 0 && $acaoMembros === 'excluir') {
+                $connection
+                    ->table('equipes45')
+                    ->whereIn('supervisor_user_id', $memberIds)
+                    ->update([
+                        'supervisor_user_id' => null,
+                        'updated_at' => now(),
+                    ]);
+
+                $connection
+                    ->table('user_permissions45')
+                    ->whereIn('user_id', $memberIds)
+                    ->delete();
+
+                $connection
+                    ->table('users45')
+                    ->whereIn('id', $memberIds)
+                    ->delete();
+            }
+
+            $connection
+                ->table('equipes45')
+                ->where('id', (int) $equipeId)
+                ->delete();
+
+            $connection->commit();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Equipe excluida com sucesso.',
+                'data' => [
+                    'id' => (int) $equipeId,
+                    'nome' => $equipe->nome ?? null,
+                    'acao_membros' => $memberCount > 0 ? $acaoMembros : null,
+                    'membros_afetados' => $memberCount,
+                ]
+            ]);
+        } catch (Throwable $e) {
+            if ($connection->transactionLevel() > 0) {
+                $connection->rollBack();
+            }
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Erro ao excluir equipe.',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
     private function resolverRole($roleId = null, string $roleName = '', $roleNivel = null): mixed
     {
         if ($roleId !== null && $roleId !== '') {
