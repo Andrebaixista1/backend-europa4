@@ -986,7 +986,7 @@ class CriacaoController extends Controller
         try {
             $empresa  = $request->input('empresa');
             $tokenApi = $request->input('token_api');
-            $equipeIds = $request->input('equipe_id', [1]);
+            $equipeIds = $this->normalizeApiEquipeIds($request->input('equipe_id', [1]));
 
             if (!$empresa) {
                 return response()->json([
@@ -1002,37 +1002,23 @@ class CriacaoController extends Controller
                 ], 422);
             }
 
-            if (!is_array($equipeIds)) {
-                $equipeIds = [$equipeIds];
-            }
-
-            $equipeIds = array_map('intval', $equipeIds);
-            $equipeIds[] = 1;
-            $equipeIds = array_values(array_unique(array_filter($equipeIds, fn($v) => $v > 0)));
-
-            $ids = [];
-
-            foreach ($equipeIds as $equipeId) {
-                $id = DB::connection('sqlsrv')
-                    ->table('consultas_api.dbo.saldo_handmais')
-                    ->insertGetId([
-                        'empresa'     => $empresa,
-                        'token_api'   => $tokenApi,
-                        'total'       => 500,
-                        'consultados' => 0,
-                        'limite'      => 500,
-                        'equipe_id'   => $equipeId,
-                        'created_at'  => now(),
-                        'updated_at'  => now(),
-                    ]);
-
-                $ids[] = $id;
-            }
+            $id = DB::connection('sqlsrv')
+                ->table('consultas_api.dbo.saldo_handmais')
+                ->insertGetId([
+                    'empresa'     => $empresa,
+                    'token_api'   => $tokenApi,
+                    'total'       => 500,
+                    'consultados' => 0,
+                    'limite'      => 500,
+                    'equipe_id'   => $this->serializeApiEquipeIds($equipeIds),
+                    'created_at'  => now(),
+                    'updated_at'  => now(),
+                ]);
 
             return response()->json([
                 'success' => true,
                 'message' => 'Empresa cadastrada com sucesso.',
-                'ids' => $ids,
+                'id' => $id,
                 'equipe_ids' => $equipeIds
             ], 201);
         } catch (\Throwable $e) {
@@ -1049,7 +1035,7 @@ class CriacaoController extends Controller
         try {
             $email     = $request->input('email');
             $senha     = $request->input('senha');
-            $equipeIds = $request->input('equipe_id', [1]);
+            $equipeIds = $this->normalizeApiEquipeIds($request->input('equipe_id', [1]));
 
             if (!$email) {
                 return response()->json([
@@ -1065,37 +1051,23 @@ class CriacaoController extends Controller
                 ], 422);
             }
 
-            if (!is_array($equipeIds)) {
-                $equipeIds = [$equipeIds];
-            }
-
-            $equipeIds = array_map('intval', $equipeIds);
-            $equipeIds[] = 1;
-            $equipeIds = array_values(array_unique(array_filter($equipeIds, fn($v) => $v > 0)));
-
-            $ids = [];
-
-            foreach ($equipeIds as $equipeId) {
-                $id = DB::connection('sqlsrv')
-                    ->table('consultas_api.dbo.saldo_v8')
-                    ->insertGetId([
-                        'email'       => $email,
-                        'senha'       => $senha,
-                        'total'       => 500,
-                        'consultados' => 0,
-                        'limite'      => 500,
-                        'equipe_id'   => $equipeId,
-                        'created_at'  => now(),
-                        'updated_at'  => now(),
-                    ]);
-
-                $ids[] = $id;
-            }
+            $id = DB::connection('sqlsrv')
+                ->table('consultas_api.dbo.saldo_v8')
+                ->insertGetId([
+                    'email'       => $email,
+                    'senha'       => $senha,
+                    'total'       => 500,
+                    'consultados' => 0,
+                    'limite'      => 500,
+                    'equipe_id'   => $this->serializeApiEquipeIds($equipeIds),
+                    'created_at'  => now(),
+                    'updated_at'  => now(),
+                ]);
 
             return response()->json([
                 'success' => true,
                 'message' => 'Cadastro realizado com sucesso.',
-                'ids' => $ids,
+                'id' => $id,
                 'equipe_ids' => $equipeIds
             ], 201);
         } catch (\Throwable $e) {
@@ -1105,6 +1077,119 @@ class CriacaoController extends Controller
                 'error' => $e->getMessage()
             ], 500);
         }
+    }
+
+    public function alterar_equipes_handmais(Request $request)
+    {
+        return $this->alterarEquipesApiCadastro(
+            $request,
+            'consultas_api.dbo.saldo_handmais',
+            'Empresa Hand+ atualizada com sucesso.'
+        );
+    }
+
+    public function alterar_equipes_v8(Request $request)
+    {
+        return $this->alterarEquipesApiCadastro(
+            $request,
+            'consultas_api.dbo.saldo_v8',
+            'Login V8 atualizado com sucesso.'
+        );
+    }
+
+    private function alterarEquipesApiCadastro(Request $request, string $table, string $successMessage)
+    {
+        try {
+            $id = (int) $request->input('id');
+            $equipeIds = $this->normalizeApiEquipeIds($request->input('equipe_id', []));
+
+            if ($id <= 0) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Campo id e obrigatorio.',
+                ], 422);
+            }
+
+            $updated = DB::connection('sqlsrv')
+                ->table($table)
+                ->where('id', $id)
+                ->update([
+                    'equipe_id' => $this->serializeApiEquipeIds($equipeIds),
+                    'updated_at' => now(),
+                ]);
+
+            if (!$updated) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Cadastro nao encontrado.',
+                ], 404);
+            }
+
+            return response()->json([
+                'success' => true,
+                'message' => $successMessage,
+                'id' => $id,
+                'equipe_ids' => $equipeIds,
+            ]);
+        } catch (Throwable $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Erro ao atualizar equipes do cadastro.',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
+     * @param mixed $rawEquipeIds
+     * @return array<int, int>
+     */
+    private function normalizeApiEquipeIds($rawEquipeIds): array
+    {
+        if (!is_array($rawEquipeIds)) {
+            $rawEquipeIds = [$rawEquipeIds];
+        }
+
+        $flattened = [];
+
+        foreach ($rawEquipeIds as $value) {
+            if (is_array($value)) {
+                $flattened = array_merge($flattened, $value);
+                continue;
+            }
+
+            $token = trim((string) $value);
+            if ($token === '') {
+                continue;
+            }
+
+            if (str_contains($token, ',')) {
+                $flattened = array_merge($flattened, array_map('trim', explode(',', $token)));
+                continue;
+            }
+
+            $flattened[] = $token;
+        }
+
+        $flattened[] = 1;
+
+        $ids = array_map(
+            static fn ($item) => (int) preg_replace('/\D+/', '', (string) $item),
+            $flattened
+        );
+
+        $ids = array_values(array_unique(array_filter($ids, static fn ($item) => $item > 0)));
+        sort($ids);
+
+        return $ids;
+    }
+
+    /**
+     * @param array<int, int> $equipeIds
+     */
+    private function serializeApiEquipeIds(array $equipeIds): string
+    {
+        return '{' . implode(',', $equipeIds) . '}';
     }
 
     public function alterar_permissoes(Request $request)

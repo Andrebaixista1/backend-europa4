@@ -480,8 +480,9 @@ class ConsultasController extends Controller
     {
         try {
             $equipeId = trim((string) $request->query('equipe_id', ''));
+            $loadAll = filter_var($request->query('all', false), FILTER_VALIDATE_BOOL);
 
-            if ($equipeId === '') {
+            if (!$loadAll && $equipeId === '') {
                 return response()->json([
                     'success' => false,
                     'message' => 'Parametro obrigatorio: equipe_id (query string).',
@@ -489,7 +490,7 @@ class ConsultasController extends Controller
                 ], 400);
             }
 
-            if (!preg_match('/^\d+$/', $equipeId)) {
+            if (!$loadAll && !preg_match('/^\d+$/', $equipeId)) {
                 return response()->json([
                     'success' => false,
                     'message' => 'equipe_id deve ser numerico.',
@@ -512,8 +513,10 @@ class ConsultasController extends Controller
 
             $params = [];
 
-            $sql .= " WHERE ',' + REPLACE(REPLACE(REPLACE(REPLACE([equipe_id], '{',''),'}',''),'[',''),']','') + ',' LIKE ?";
-            $params[] = "%," . $equipeId . ",%";
+            if (!$loadAll) {
+                $sql .= " WHERE ',' + REPLACE(REPLACE(REPLACE(REPLACE([equipe_id], '{',''),'}',''),'[',''),']','') + ',' LIKE ?";
+                $params[] = "%," . $equipeId . ",%";
+            }
 
             $sql .= " ORDER BY [id] DESC";
 
@@ -537,8 +540,9 @@ class ConsultasController extends Controller
     {
         try {
             $equipeId = trim((string) $request->query('equipe_id', ''));
+            $loadAll = filter_var($request->query('all', false), FILTER_VALIDATE_BOOL);
 
-            if ($equipeId === '') {
+            if (!$loadAll && $equipeId === '') {
                 return response()->json([
                     'success' => false,
                     'message' => 'Parametro obrigatorio: equipe_id (query string).',
@@ -546,7 +550,7 @@ class ConsultasController extends Controller
                 ], 400);
             }
 
-            if (!preg_match('/^\d+$/', $equipeId)) {
+            if (!$loadAll && !preg_match('/^\d+$/', $equipeId)) {
                 return response()->json([
                     'success' => false,
                     'message' => 'equipe_id deve ser numerico.',
@@ -568,8 +572,10 @@ class ConsultasController extends Controller
 
             $params = [];
 
-            $sql .= " WHERE ',' + REPLACE(REPLACE(REPLACE(REPLACE([equipe_id], '{',''),'}',''),'[',''),']','') + ',' LIKE ?";
-            $params[] = "%," . $equipeId . ",%";
+            if (!$loadAll) {
+                $sql .= " WHERE ',' + REPLACE(REPLACE(REPLACE(REPLACE([equipe_id], '{',''),'}',''),'[',''),']','') + ',' LIKE ?";
+                $params[] = "%," . $equipeId . ",%";
+            }
 
             $sql .= " ORDER BY [id] DESC";
 
