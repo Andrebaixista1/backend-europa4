@@ -10,6 +10,237 @@ use Throwable;
 
 class ConsultasController extends Controller
 {
+    private function equipeFilterSql(string $column): string
+    {
+        return "',' + REPLACE(REPLACE(REPLACE(REPLACE([$column], '{',''),'}',''),'[',''),']','') + ',' LIKE ?";
+    }
+
+    private function validarEquipeId(Request $request, string $exemplo)
+    {
+        $equipeId = trim((string) $request->query('equipe_id', ''));
+        $loadAll = filter_var($request->query('all', false), FILTER_VALIDATE_BOOL);
+
+        if (! $loadAll && $equipeId === '') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Parametro obrigatorio: equipe_id (query string).',
+                'exemplo' => $exemplo,
+            ], 400);
+        }
+
+        if (! $loadAll && ! preg_match('/^\d+$/', $equipeId)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'equipe_id deve ser numerico.',
+            ], 400);
+        }
+
+        return [$equipeId, $loadAll];
+    }
+
+    public function dashboard_saldos_v8(Request $request)
+    {
+        try {
+            $validacao = $this->validarEquipeId($request, '/api/dashboard/saldos/v8?equipe_id=1');
+            if ($validacao instanceof \Illuminate\Http\JsonResponse) {
+                return $validacao;
+            }
+
+            [$equipeId, $loadAll] = $validacao;
+
+            $sql = "
+                SELECT TOP (1000) [id]
+                    ,[email]
+                    ,[senha]
+                    ,[total]
+                    ,[consultados]
+                    ,[limite]
+                    ,[created_at]
+                    ,[updated_at]
+                    ,[equipe_id]
+                FROM [consultas_api].[dbo].[saldo_v8]
+            ";
+
+            $params = [];
+
+            if (! $loadAll) {
+                $sql .= " WHERE " . $this->equipeFilterSql('equipe_id');
+                $params[] = "%," . $equipeId . ",%";
+            }
+
+            $sql .= " ORDER BY [id] DESC";
+            $saldos = DB::connection('sqlsrv')->select($sql, $params);
+
+            return response()->json([
+                'success' => true,
+                'total' => count($saldos),
+                'data' => $saldos,
+            ]);
+        } catch (Throwable $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Erro ao buscar saldos V8',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    public function dashboard_saldos_handmais(Request $request)
+    {
+        try {
+            $validacao = $this->validarEquipeId($request, '/api/dashboard/saldos/handmais?equipe_id=1');
+            if ($validacao instanceof \Illuminate\Http\JsonResponse) {
+                return $validacao;
+            }
+
+            [$equipeId, $loadAll] = $validacao;
+
+            $sql = "
+                SELECT TOP (1000) [id]
+                    ,[empresa]
+                    ,[token_api]
+                    ,[total]
+                    ,[consultados]
+                    ,[limite]
+                    ,[equipe_id]
+                    ,[created_at]
+                    ,[updated_at]
+                FROM [consultas_api].[dbo].[saldo_handmais]
+            ";
+
+            $params = [];
+
+            if (! $loadAll) {
+                $sql .= " WHERE " . $this->equipeFilterSql('equipe_id');
+                $params[] = "%," . $equipeId . ",%";
+            }
+
+            $sql .= " ORDER BY [id] DESC";
+            $saldos = DB::connection('sqlsrv')->select($sql, $params);
+
+            return response()->json([
+                'success' => true,
+                'total' => count($saldos),
+                'data' => $saldos,
+            ]);
+        } catch (Throwable $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Erro ao buscar saldos HandMais',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    public function dashboard_consultas_handmais(Request $request)
+    {
+        try {
+            $validacao = $this->validarEquipeId($request, '/api/dashboard/consultas/handmais?equipe_id=1');
+            if ($validacao instanceof \Illuminate\Http\JsonResponse) {
+                return $validacao;
+            }
+
+            [$equipeId, $loadAll] = $validacao;
+
+            $sql = "
+                SELECT TOP (1000) [id]
+                    ,[nome]
+                    ,[cpf]
+                    ,[telefone]
+                    ,[dataNascimento]
+                    ,[status]
+                    ,[tipoConsulta]
+                    ,[descricao]
+                    ,[nome_tabela]
+                    ,[valor_margem]
+                    ,[id_tabela]
+                    ,[token_tabela]
+                    ,[id_user]
+                    ,[equipe_id]
+                    ,[id_consulta_hand]
+                    ,[created_at]
+                    ,[updated_at]
+                FROM [consultas_api].[dbo].[consulta_handmais]
+            ";
+
+            $params = [];
+
+            if (! $loadAll) {
+                $sql .= " WHERE [equipe_id] = ?";
+                $params[] = (int) $equipeId;
+            }
+
+            $sql .= " ORDER BY [id] DESC";
+            $consultas = DB::connection('sqlsrv')->select($sql, $params);
+
+            return response()->json([
+                'success' => true,
+                'total' => count($consultas),
+                'data' => $consultas,
+            ]);
+        } catch (Throwable $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Erro ao buscar consultas HandMais',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    public function dashboard_consultas_v8(Request $request)
+    {
+        try {
+            $validacao = $this->validarEquipeId($request, '/api/dashboard/consultas/v8?equipe_id=1');
+            if ($validacao instanceof \Illuminate\Http\JsonResponse) {
+                return $validacao;
+            }
+
+            [$equipeId, $loadAll] = $validacao;
+
+            $sql = "
+                SELECT TOP (1000) [cliente_cpf]
+                    ,[cliente_sexo]
+                    ,[nascimento]
+                    ,[cliente_nome]
+                    ,[email]
+                    ,[telefone]
+                    ,[created_at]
+                    ,[status]
+                    ,[status_consulta_v8]
+                    ,[valor_liberado]
+                    ,[descricao_v8]
+                    ,[id_user]
+                    ,[id_equipe]
+                    ,[id_roles]
+                    ,[id]
+                    ,[tipoConsulta]
+                FROM [consultas_api].[dbo].[consulta_v8]
+            ";
+
+            $params = [];
+
+            if (! $loadAll) {
+                $sql .= " WHERE [id_equipe] = ?";
+                $params[] = (int) $equipeId;
+            }
+
+            $sql .= " ORDER BY [id] DESC";
+            $consultas = DB::connection('sqlsrv')->select($sql, $params);
+
+            return response()->json([
+                'success' => true,
+                'total' => count($consultas),
+                'data' => $consultas,
+            ]);
+        } catch (Throwable $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Erro ao buscar consultas V8',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
     public function usuarios()
     {
         try {

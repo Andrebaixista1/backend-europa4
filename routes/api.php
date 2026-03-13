@@ -51,6 +51,10 @@ Route::post('/health-consult/force-backup', [BackupHealthController::class, 'for
 // Logins
 Route::get('/logins/consultashandmais', [ConsultasController::class, 'handmais_login']);
 Route::get('/logins/consultasv8', [ConsultasController::class, 'v8_login']);
+Route::get('/dashboard/saldos/handmais', [ConsultasController::class, 'dashboard_saldos_handmais']);
+Route::get('/dashboard/saldos/v8', [ConsultasController::class, 'dashboard_saldos_v8']);
+Route::get('/dashboard/consultas/handmais', [ConsultasController::class, 'dashboard_consultas_handmais']);
+Route::get('/dashboard/consultas/v8', [ConsultasController::class, 'dashboard_consultas_v8']);
 
 // Hand +
 Route::post('/online/consultashandmais', [HandMaisController::class, 'handmais_online']);
