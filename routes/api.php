@@ -57,9 +57,13 @@ Route::post('/online/consultashandmais', [HandMaisController::class, 'handmais_o
 Route::get('/start/consultashandmais', [HandMaisController::class, 'processar_fila']);
 Route::post('/register/consultashandmais', [CriacaoController::class, 'handmais_cadastro']);
 Route::patch('/alter/consultashandmais/equipes', [CriacaoController::class, 'alterar_equipes_handmais']);
+Route::patch('/delete/consultashandmais', [CriacaoController::class, 'excluir_handmais_cadastro']);
+Route::delete('/delete/consultashandmais', [CriacaoController::class, 'excluir_handmais_cadastro']);
 
 // V8 
 Route::post('/register/consultasv8', [CriacaoController::class, 'v8_cadastro']);
 Route::patch('/alter/consultasv8/equipes', [CriacaoController::class, 'alterar_equipes_v8']);
+Route::patch('/delete/consultasv8', [CriacaoController::class, 'excluir_v8_cadastro']);
+Route::delete('/delete/consultasv8', [CriacaoController::class, 'excluir_v8_cadastro']);
 Route::post('/online/consultasv8', [v8Controller::class, 'V8_online']);
 Route::get('/start/consultasv8', [v8Controller::class, 'processar_fila']);

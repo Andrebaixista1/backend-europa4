@@ -1097,6 +1097,24 @@ class CriacaoController extends Controller
         );
     }
 
+    public function excluir_handmais_cadastro(Request $request)
+    {
+        return $this->excluirApiCadastro(
+            $request,
+            'consultas_api.dbo.saldo_handmais',
+            'Cadastro Hand+ excluido com sucesso.'
+        );
+    }
+
+    public function excluir_v8_cadastro(Request $request)
+    {
+        return $this->excluirApiCadastro(
+            $request,
+            'consultas_api.dbo.saldo_v8',
+            'Login V8 excluido com sucesso.'
+        );
+    }
+
     private function alterarEquipesApiCadastro(Request $request, string $table, string $successMessage)
     {
         try {
@@ -1135,6 +1153,49 @@ class CriacaoController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Erro ao atualizar equipes do cadastro.',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    private function excluirApiCadastro(Request $request, string $table, string $successMessage)
+    {
+        try {
+            $id = (int) $request->input('id', $request->input('cadastro_id'));
+
+            if ($id <= 0) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Campo id e obrigatorio.',
+                ], 422);
+            }
+
+            $cadastro = DB::connection('sqlsrv')
+                ->table($table)
+                ->where('id', $id)
+                ->first();
+
+            if (!$cadastro) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Cadastro nao encontrado.',
+                ], 404);
+            }
+
+            DB::connection('sqlsrv')
+                ->table($table)
+                ->where('id', $id)
+                ->delete();
+
+            return response()->json([
+                'success' => true,
+                'message' => $successMessage,
+                'id' => $id,
+            ]);
+        } catch (Throwable $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Erro ao excluir cadastro.',
                 'error' => $e->getMessage(),
             ], 500);
         }
