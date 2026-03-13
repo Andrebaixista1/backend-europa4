@@ -60,6 +60,49 @@ Resposta:
 }
 ```
 
+### `GET /api/health-consult`
+Consulta a saude dos backups nas conexoes SQL Server configuradas (`sqlsrv`, `sqlsrv2`, `sqlsrv3`).
+
+Resposta:
+
+```json
+{
+  "generated_at": "2026-03-13T14:16:52+00:00",
+  "servers": [],
+  "meta": {
+    "source": "laravel-backup-health",
+    "partial": false
+  }
+}
+```
+
+Cada item de `servers` agrega:
+
+- nome do servidor
+- ultimo backup encontrado
+- quantidade de bancos
+- pendencias
+- erros
+- backups em execucao
+- estatisticas diaria, semanal e mensal
+- lista de bancos com ultimo backup
+
+### `POST /api/health-consult/force-backup`
+Endpoint para disparo de backup manual. Fica desabilitado por padrao e depende das variaveis:
+
+- `HEALTH_CONSULT_FORCE_ENABLED=true`
+- `HEALTH_CONSULT_FORCE_BACKUP_DIR=/caminho/de/backups`
+
+Body esperado:
+
+```json
+{
+  "name_database": "Hostinger",
+  "type": "daily",
+  "pending": ["europa4"]
+}
+```
+
 ### `GET /api/permissoes`
 Lista permissoes vindas da tabela `[europa4].[dbo].[permissions45]`.
 

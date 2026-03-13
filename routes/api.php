@@ -3,6 +3,7 @@
 use App\Http\Controllers\Api\PingController;
 use Illuminate\Http\Request;
 use App\Http\Controllers\Api\AuthController;
+use App\Http\Controllers\Api\BackupHealthController;
 use App\Http\Controllers\Api\ConsultasController;
 use App\Http\Controllers\Api\CriacaoController;
 use App\Http\Controllers\Api\HandMaisController;
@@ -43,6 +44,8 @@ Route::patch('/permissoes/alterar', [CriacaoController::class, 'alterar_permisso
 Route::get('/databases/hostinger', [ConsultasController::class, 'hostinger']);
 Route::get('/databases/local', [ConsultasController::class, 'local']);
 Route::get('/databases/kinghost', [ConsultasController::class, 'kinghost']);
+Route::get('/health-consult', [BackupHealthController::class, 'health']);
+Route::post('/health-consult/force-backup', [BackupHealthController::class, 'forceBackup']);
 
 // Consultas Online
 // Logins
