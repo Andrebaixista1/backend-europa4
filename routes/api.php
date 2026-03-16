@@ -63,6 +63,7 @@ Route::get('/dashboard/consultas/v8', [ConsultasController::class, 'dashboard_co
 Route::get('/dashboard/consultas/presenca', [ConsultasController::class, 'dashboard_consultas_presenca']);
 Route::get('/dashboard/consultas/in100', [ConsultasController::class, 'dashboard_consultas_in100']);
 Route::get('/dashboard/consultas/prata', [ConsultasController::class, 'dashboard_consultas_prata']);
+Route::get('/dashboard/fila/in100', [ConsultasController::class, 'dashboard_fila_in100']);
 
 // Hand +
 Route::post('/online/consultashandmais', [HandMaisController::class, 'handmais_online']);

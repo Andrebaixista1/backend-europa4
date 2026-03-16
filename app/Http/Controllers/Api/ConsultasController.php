@@ -363,25 +363,28 @@ class ConsultasController extends Controller
 
             $sql = "
                 SELECT TOP (1000)
-                    s.[id] AS [saldo_id],
-                    s.[total_carregado],
-                    s.[limite_disponivel],
-                    s.[consultas_realizada],
-                    s.[data_saldo_carregado],
-                    s.[equipe_id],
-                    ISNULL(e.[nome], N'Equipe Excluida') AS [equipe_nome]
-                FROM [europa4].[dbo].[saldoin100] s
-                LEFT JOIN [europa4].[dbo].[equipes45] e
-                    ON e.[id] = s.[equipe_id]
+                    [id] AS [saldo_id],
+                    [total] AS [total_carregado],
+                    [limite] AS [limite_disponivel],
+                    [consultados] AS [consultas_realizada],
+                    [created_at] AS [data_saldo_carregado],
+                    [equipe_id],
+                    [equipe_nome],
+                    [total],
+                    [consultados],
+                    [limite],
+                    [created_at],
+                    [updated_at]
+                FROM [consultas_api].[dbo].[saldo_in100]
             ";
 
             $params = [];
             if (! $loadAll) {
-                $sql .= " WHERE s.[equipe_id] = ?";
-                $params[] = (int) $equipeId;
+                $sql .= " WHERE " . $this->equipeFilterSql('equipe_id');
+                $params[] = "%," . $equipeId . ",%";
             }
 
-            $sql .= " ORDER BY s.[data_saldo_carregado] DESC, s.[id] DESC";
+            $sql .= " ORDER BY [id] DESC";
             $saldos = DB::connection('sqlsrv')->select($sql, $params);
 
             return response()->json([
@@ -416,29 +419,58 @@ class ConsultasController extends Controller
 
             $sql = "
                 SELECT TOP (10000)
-                    ca.*,
-                    u.[login],
-                    u.[nome] AS [user_name],
-                    u.[equipe_id]
-                FROM [Inbis].[dbo].[consultas_api] ca
-                LEFT JOIN [europa4].[dbo].[users45] u
-                    ON ca.[id_usuario] = u.[id]
+                    [id],
+                    [numero_beneficio],
+                    [numero_documento],
+                    [nome],
+                    [estado],
+                    [pensao],
+                    [data_nascimento],
+                    [tipo_bloqueio],
+                    [data_concessao],
+                    [tipo_credito],
+                    [limite_cartao_beneficio],
+                    [saldo_cartao_beneficio],
+                    [situacao_beneficio],
+                    [data_final_beneficio],
+                    [limite_cartao_consignado],
+                    [saldo_cartao_consignado],
+                    [saldo_credito_consignado],
+                    [saldo_total_maximo],
+                    [saldo_total_utilizado],
+                    [saldo_total_disponivel],
+                    [data_consulta],
+                    [data_retorno_consulta],
+                    [hora_retorno_consulta],
+                    [nome_representante_legal],
+                    [banco_desembolso],
+                    [agencia_desembolso],
+                    [conta_desembolso],
+                    [digito_desembolso],
+                    [numero_portabilidades],
+                    [id_usuario],
+                    [data_hora_registro],
+                    [nome_arquivo],
+                    [resposta_api],
+                    [status_api],
+                    [equipe_id]
+                FROM [consultas_api].[dbo].[consultas_in100]
             ";
 
             $params = [];
             if (! $loadAll) {
                 if ($role === 'operador' && $idUser > 0) {
-                    $sql .= " WHERE ca.[id_usuario] = ?";
+                    $sql .= " WHERE [id_usuario] = ?";
                     $params[] = $idUser;
                 } else {
-                    $sql .= " WHERE u.[equipe_id] = ?";
-                    $params[] = (int) $equipeId;
+                    $sql .= " WHERE " . $this->equipeFilterSql('equipe_id');
+                    $params[] = "%," . $equipeId . ",%";
                 }
             } else {
-                $sql .= " WHERE ca.[data_hora_registro] >= DATEADD(DAY, -30, GETDATE())";
+                $sql .= " WHERE [data_hora_registro] >= DATEADD(DAY, -30, GETDATE())";
             }
 
-            $sql .= " ORDER BY ca.[id] DESC";
+            $sql .= " ORDER BY [id] DESC";
             $consultas = DB::connection('sqlsrv')->select($sql, $params);
 
             return response()->json([
@@ -450,6 +482,51 @@ class ConsultasController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Erro ao buscar consultas IN100',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    public function dashboard_fila_in100(Request $request)
+    {
+        try {
+            $validacao = $this->validarEquipeId($request, '/api/dashboard/fila/in100?equipe_id=1');
+            if ($validacao instanceof \Illuminate\Http\JsonResponse) {
+                return $validacao;
+            }
+
+            [$equipeId, $loadAll] = $validacao;
+
+            $sql = "
+                SELECT TOP (1000)
+                    [id],
+                    [cpf],
+                    [id_consulta] AS [numero_beneficio],
+                    [id_user],
+                    [equipe_id],
+                    [created_at],
+                    [updated_at]
+                FROM [consultas_api].[dbo].[filaconsulta_in100]
+            ";
+
+            $params = [];
+            if (! $loadAll) {
+                $sql .= " WHERE [equipe_id] = ?";
+                $params[] = (int) $equipeId;
+            }
+
+            $sql .= " ORDER BY [id] DESC";
+            $fila = DB::connection('sqlsrv')->select($sql, $params);
+
+            return response()->json([
+                'success' => true,
+                'total' => count($fila),
+                'data' => $fila,
+            ]);
+        } catch (Throwable $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Erro ao buscar fila IN100',
                 'error' => $e->getMessage(),
             ], 500);
         }
