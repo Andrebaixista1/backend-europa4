@@ -401,6 +401,71 @@ class ConsultasController extends Controller
         }
     }
 
+    public function recarga_in100(Request $request)
+    {
+        try {
+            $equipeId = trim((string) $request->input('equipeId', $request->input('equipe_id', '')));
+            $equipeNome = trim((string) $request->input('equipeNome', $request->input('equipe_nome', '')));
+            $quantidadeRaw = $request->input('quantidade', $request->input('total', null));
+
+            if ($equipeId === '' || !preg_match('/^\d+$/', $equipeId)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'equipeId deve ser numerico.',
+                ], 400);
+            }
+
+            if ($equipeNome === '') {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'equipeNome obrigatorio.',
+                ], 400);
+            }
+
+            $quantidade = is_numeric($quantidadeRaw) ? (int) $quantidadeRaw : 0;
+            if ($quantidade <= 0) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'quantidade deve ser maior que zero.',
+                ], 400);
+            }
+
+            $now = now()->format('Y-m-d H:i:s');
+
+            DB::connection('sqlsrv')->insert("
+                INSERT INTO [consultas_api].[dbo].[saldo_in100]
+                    ([equipe_nome], [total], [consultados], [limite], [equipe_id], [created_at])
+                VALUES (?, ?, ?, ?, ?, ?)
+            ", [
+                $equipeNome,
+                $quantidade,
+                0,
+                $quantidade,
+                $equipeId,
+                $now,
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Recarga registrada com sucesso.',
+                'data' => [
+                    'equipe_id' => $equipeId,
+                    'equipe_nome' => $equipeNome,
+                    'total' => $quantidade,
+                    'consultados' => 0,
+                    'limite' => $quantidade,
+                    'created_at' => $now,
+                ],
+            ], 201);
+        } catch (Throwable $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Erro ao registrar recarga IN100',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
     public function dashboard_consultas_in100(Request $request)
     {
         try {
@@ -1419,6 +1484,151 @@ class ConsultasController extends Controller
                 'success' => false,
                 'message' => 'Erro ao buscar logins',
                 'error'   => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    public function vanguard_list()
+    {
+        try {
+            $rows = DB::connection('sqlsrv')->select("
+                SELECT TOP (1000)
+                    [id],
+                    [codigo],
+                    [empresa],
+                    [login],
+                    [nome],
+                    [cargo],
+                    [data_cadastro],
+                    [renovacao],
+                    [status],
+                    [vencimento],
+                    [grupo]
+                FROM [Inbis].[dbo].[usuarios_vanguard]
+                ORDER BY [id] DESC
+            ");
+
+            return response()->json($rows);
+        } catch (Throwable $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Erro ao buscar Vanguard',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    public function vanguard_add(Request $request)
+    {
+        try {
+            $payload = $request->all();
+            $codigo = trim((string) ($payload['codigo'] ?? ''));
+            $empresa = trim((string) ($payload['empresa'] ?? ''));
+            $login = trim((string) ($payload['login'] ?? ''));
+            $nome = trim((string) ($payload['nome'] ?? ''));
+            $cargo = trim((string) ($payload['cargo'] ?? ''));
+            $dataCadastro = trim((string) ($payload['data_cadastro'] ?? ''));
+            $renovacao = trim((string) ($payload['renovacao'] ?? $dataCadastro));
+            $status = trim((string) ($payload['status'] ?? 'Ativo'));
+            $vencimento = trim((string) ($payload['vencimento'] ?? ''));
+            $grupo = trim((string) ($payload['grupo'] ?? ''));
+
+            if ($codigo === '' || $empresa === '' || $login === '' || $cargo === '' || $dataCadastro === '' || $grupo === '') {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Campos obrigatorios: codigo, empresa, login, cargo, data_cadastro, grupo.',
+                ], 400);
+            }
+
+            DB::connection('sqlsrv')->insert("
+                INSERT INTO [Inbis].[dbo].[usuarios_vanguard]
+                    ([codigo], [empresa], [login], [nome], [cargo], [data_cadastro], [renovacao], [status], [vencimento], [grupo])
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ", [
+                $codigo,
+                $empresa,
+                $login,
+                $nome,
+                $cargo,
+                $dataCadastro,
+                $renovacao,
+                $status ?: 'Ativo',
+                $vencimento ?: null,
+                $grupo,
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Usuario Vanguard adicionado.',
+            ], 201);
+        } catch (Throwable $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Erro ao adicionar Vanguard',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    public function vanguard_renew(Request $request)
+    {
+        try {
+            $id = (int) $request->input('id', 0);
+            if ($id <= 0) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Parametro obrigatorio: id',
+                ], 400);
+            }
+
+            $today = now()->format('Y-m-d');
+            $vencimento = now()->addMonth()->format('Y-m-d');
+
+            DB::connection('sqlsrv')->update("
+                UPDATE [Inbis].[dbo].[usuarios_vanguard]
+                SET [renovacao] = ?, [vencimento] = ?, [status] = 'Ativo'
+                WHERE [id] = ?
+            ", [$today, $vencimento, $id]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Usuario Vanguard renovado.',
+            ]);
+        } catch (Throwable $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Erro ao renovar Vanguard',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    public function vanguard_inactivate(Request $request)
+    {
+        try {
+            $id = (int) $request->input('id', 0);
+            if ($id <= 0) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Parametro obrigatorio: id',
+                ], 400);
+            }
+
+            DB::connection('sqlsrv')->update("
+                UPDATE [Inbis].[dbo].[usuarios_vanguard]
+                SET [status] = 'Inativo'
+                WHERE [id] = ?
+            ", [$id]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Usuario Vanguard inativado.',
+            ]);
+        } catch (Throwable $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Erro ao inativar Vanguard',
+                'error' => $e->getMessage(),
             ], 500);
         }
     }

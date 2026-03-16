@@ -46,6 +46,10 @@ Route::get('/databases/local', [ConsultasController::class, 'local']);
 Route::get('/databases/kinghost', [ConsultasController::class, 'kinghost']);
 Route::get('/health-consult', [BackupHealthController::class, 'health']);
 Route::post('/health-consult/force-backup', [BackupHealthController::class, 'forceBackup']);
+Route::get('/getall-vanguard', [ConsultasController::class, 'vanguard_list']);
+Route::post('/add-vanguard', [ConsultasController::class, 'vanguard_add']);
+Route::post('/up-vanguard', [ConsultasController::class, 'vanguard_renew']);
+Route::post('/del-vanguard', [ConsultasController::class, 'vanguard_inactivate']);
 
 // Consultas Online
 // Logins
@@ -65,6 +69,7 @@ Route::get('/dashboard/consultas/presenca', [ConsultasController::class, 'dashbo
 Route::get('/dashboard/consultas/in100', [ConsultasController::class, 'dashboard_consultas_in100']);
 Route::get('/dashboard/consultas/prata', [ConsultasController::class, 'dashboard_consultas_prata']);
 Route::get('/dashboard/fila/in100', [ConsultasController::class, 'dashboard_fila_in100']);
+Route::post('/recargas/in100', [ConsultasController::class, 'recarga_in100']);
 
 // Hand +
 Route::post('/online/consultashandmais', [HandMaisController::class, 'handmais_online']);
