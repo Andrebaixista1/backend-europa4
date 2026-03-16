@@ -1207,7 +1207,7 @@ class CriacaoController extends Controller
                     'limite'      => 1000,
                     'equipe_id'   => $this->serializeApiEquipeIds($equipeIds),
                     'token'       => $token,
-                    'account_id'  => (string) $accountId,
+                    'account_id'  => (int) $accountId,
                     'account_token' => $accountToken,
                     'created_at'  => now(),
                     'updated_at'  => now(),
