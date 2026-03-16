@@ -1260,9 +1260,9 @@ class CriacaoController extends Controller
                 ->insertGetId([
                     'login'       => $login,
                     'senha'       => $senha,
-                    'total'       => 1000,
+                    'total'       => 80,
                     'consultados' => 0,
-                    'limite'      => 1000,
+                    'limite'      => 80,
                     'equipe_id'   => $equipeIds[0] ?? 1,
                     'token'       => $token,
                     'account_id'  => (int) $accountId,
