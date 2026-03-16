@@ -484,8 +484,8 @@ class ConsultasController extends Controller
 
             $params = [];
             if (! $loadAll) {
-                $sql .= " WHERE " . $this->equipeFilterSql('equipe_id');
-                $params[] = "%," . $equipeId . ",%";
+                $sql .= " WHERE [equipe_id] = ?";
+                $params[] = (int) $equipeId;
             }
 
             $sql .= " ORDER BY [consultados] DESC, [id] DESC";
@@ -520,7 +520,6 @@ class ConsultasController extends Controller
                     [id],
                     [cpf],
                     [nome],
-                    [telefone],
                     [status],
                     [sexo],
                     [elegivel],
@@ -534,7 +533,6 @@ class ConsultasController extends Controller
                     [qtd_contratos_suspensos],
                     [margem_disponivel],
                     [status_consulta],
-                    [fornecedor_id],
                     [margem_total_disponivel],
                     [saldo_total_disp_6_parcelas],
                     [valor_emissao_6_parcelas],
@@ -614,8 +612,8 @@ class ConsultasController extends Controller
             $params = [];
 
             if (!$loadAll) {
-                $sql .= " WHERE " . $this->equipeFilterSql('equipe_id');
-                $params[] = "%," . $equipeId . ",%";
+                $sql .= " WHERE [equipe_id] = ?";
+                $params[] = (int) $equipeId;
             }
 
             $sql .= " ORDER BY [id] DESC";
