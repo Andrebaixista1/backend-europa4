@@ -53,6 +53,7 @@ Route::get('/logins/consultashandmais', [ConsultasController::class, 'handmais_l
 Route::get('/logins/consultasv8', [ConsultasController::class, 'v8_login']);
 Route::get('/logins/consultaspresenca', [ConsultasController::class, 'presenca_login']);
 Route::get('/logins/consultasprata', [ConsultasController::class, 'prata_login']);
+Route::get('/logins/consultasin100', [ConsultasController::class, 'in100_login']);
 Route::get('/dashboard/saldos/handmais', [ConsultasController::class, 'dashboard_saldos_handmais']);
 Route::get('/dashboard/saldos/v8', [ConsultasController::class, 'dashboard_saldos_v8']);
 Route::get('/dashboard/saldos/presenca', [ConsultasController::class, 'dashboard_saldos_presenca']);
@@ -78,6 +79,10 @@ Route::post('/register/consultasv8', [CriacaoController::class, 'v8_cadastro']);
 Route::patch('/alter/consultasv8/equipes', [CriacaoController::class, 'alterar_equipes_v8']);
 Route::patch('/delete/consultasv8', [CriacaoController::class, 'excluir_v8_cadastro']);
 Route::delete('/delete/consultasv8', [CriacaoController::class, 'excluir_v8_cadastro']);
+Route::post('/register/consultasin100', [CriacaoController::class, 'in100_cadastro']);
+Route::patch('/alter/consultasin100/equipes', [CriacaoController::class, 'alterar_equipes_in100']);
+Route::patch('/delete/consultasin100', [CriacaoController::class, 'excluir_in100_cadastro']);
+Route::delete('/delete/consultasin100', [CriacaoController::class, 'excluir_in100_cadastro']);
 Route::post('/register/consultaspresenca', [CriacaoController::class, 'presenca_cadastro']);
 Route::patch('/alter/consultaspresenca/equipes', [CriacaoController::class, 'alterar_equipes_presenca']);
 Route::patch('/delete/consultaspresenca', [CriacaoController::class, 'excluir_presenca_cadastro']);

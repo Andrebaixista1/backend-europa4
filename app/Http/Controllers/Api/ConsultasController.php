@@ -1236,6 +1236,64 @@ class ConsultasController extends Controller
         }
     }
 
+    public function in100_login(Request $request)
+    {
+        try {
+            $equipeId = trim((string) $request->query('equipe_id', ''));
+            $loadAll = filter_var($request->query('all', false), FILTER_VALIDATE_BOOL);
+
+            if (!$loadAll && $equipeId === '') {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Parametro obrigatorio: equipe_id (query string).',
+                    'exemplo' => '/api/logins/consultasin100?equipe_id=1',
+                ], 400);
+            }
+
+            if (!$loadAll && !preg_match('/^\d+$/', $equipeId)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'equipe_id deve ser numerico.',
+                ], 400);
+            }
+
+            $sql = "
+            SELECT TOP (1000) [id]
+                ,[equipe_nome]
+                ,[total]
+                ,[consultados]
+                ,[limite]
+                ,[equipe_id]
+                ,[created_at]
+                ,[updated_at]
+            FROM [consultas_api].[dbo].[saldo_in100]
+        ";
+
+            $params = [];
+
+            if (!$loadAll) {
+                $sql .= " WHERE ',' + REPLACE(REPLACE(REPLACE(REPLACE([equipe_id], '{',''),'}',''),'[',''),']','') + ',' LIKE ?";
+                $params[] = "%," . $equipeId . ",%";
+            }
+
+            $sql .= " ORDER BY [id] DESC";
+
+            $usuarios = DB::connection('sqlsrv')->select($sql, $params);
+
+            return response()->json([
+                'success' => true,
+                'total'   => count($usuarios),
+                'data'    => $usuarios,
+            ]);
+        } catch (Throwable $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Erro ao buscar logins IN100',
+                'error'   => $e->getMessage(),
+            ], 500);
+        }
+    }
+
     public function v8_login(Request $request)
     {
         try {

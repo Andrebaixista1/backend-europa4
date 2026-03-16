@@ -1080,6 +1080,54 @@ class CriacaoController extends Controller
         }
     }
 
+    public function in100_cadastro(Request $request)
+    {
+        try {
+            $equipeNome = trim((string) $request->input('equipe_nome', ''));
+            $total = (int) $request->input('total', 1000);
+            $equipeIds = $this->normalizeApiEquipeIds($request->input('equipe_id', [1]));
+
+            if ($equipeNome === '') {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Campo equipe_nome e obrigatorio.'
+                ], 422);
+            }
+
+            if ($total <= 0) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Campo total deve ser maior que zero.'
+                ], 422);
+            }
+
+            $id = DB::connection('sqlsrv')
+                ->table('consultas_api.dbo.saldo_in100')
+                ->insertGetId([
+                    'equipe_nome' => $equipeNome,
+                    'total'       => $total,
+                    'consultados' => 0,
+                    'limite'      => $total,
+                    'equipe_id'   => $this->serializeApiEquipeIds($equipeIds),
+                    'created_at'  => now(),
+                    'updated_at'  => now(),
+                ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Cadastro IN100 realizado com sucesso.',
+                'id' => $id,
+                'equipe_ids' => $equipeIds
+            ], 201);
+        } catch (\Throwable $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Erro ao cadastrar IN100.',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
     public function presenca_cadastro(Request $request)
     {
         try {
@@ -1256,6 +1304,15 @@ class CriacaoController extends Controller
         );
     }
 
+    public function alterar_equipes_in100(Request $request)
+    {
+        return $this->alterarEquipesApiCadastro(
+            $request,
+            'consultas_api.dbo.saldo_in100',
+            'Cadastro IN100 atualizado com sucesso.'
+        );
+    }
+
     public function alterar_equipes_presenca(Request $request)
     {
         return $this->alterarEquipesApiCadastro(
@@ -1289,6 +1346,15 @@ class CriacaoController extends Controller
             $request,
             'consultas_api.dbo.saldo_v8',
             'Login V8 excluido com sucesso.'
+        );
+    }
+
+    public function excluir_in100_cadastro(Request $request)
+    {
+        return $this->excluirApiCadastro(
+            $request,
+            'consultas_api.dbo.saldo_in100',
+            'Cadastro IN100 excluido com sucesso.'
         );
     }
 
