@@ -520,7 +520,6 @@ class ConsultasController extends Controller
                     [id],
                     [cpf],
                     [nome],
-                    [status],
                     [sexo],
                     [elegivel],
                     [dt_nascimento],
