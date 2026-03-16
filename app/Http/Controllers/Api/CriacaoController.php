@@ -256,6 +256,9 @@ class CriacaoController extends Controller
     {
         try {
             $userId = $request->input('id');
+            $requesterId = $request->input('requester_id', $request->input('id_user'));
+            $requesterRole = Str::lower(trim((string) $request->input('requester_role', $request->input('role', ''))));
+            $requesterEquipeId = $request->input('requester_equipe_id', $request->input('equipe_id'));
             $senhaAtual = (string) $request->input('senha_atual', '');
             $senhaNova = (string) $request->input('senha_nova', $request->input('senha', ''));
             $confirmacao = (string) $request->input('confirmacao', '');
@@ -263,21 +266,14 @@ class CriacaoController extends Controller
             if ($userId === null || $userId === '') {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Campo id é obrigatório.'
-                ], 422);
-            }
-
-            if ($senhaAtual === '') {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Campo senha_atual é obrigatório.'
+                    'message' => 'Campo id ? obrigat?rio.'
                 ], 422);
             }
 
             if ($senhaNova === '') {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Campo senha_nova é obrigatório.'
+                    'message' => 'Campo senha_nova ? obrigat?rio.'
                 ], 422);
             }
 
@@ -291,14 +287,14 @@ class CriacaoController extends Controller
             if ($confirmacao === '') {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Campo confirmacao é obrigatório.'
+                    'message' => 'Campo confirmacao ? obrigat?rio.'
                 ], 422);
             }
 
             if ($senhaNova !== $confirmacao) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'A confirmação da senha não confere.'
+                    'message' => 'A confirma??o da senha n?o confere.'
                 ], 422);
             }
 
@@ -310,14 +306,55 @@ class CriacaoController extends Controller
             if (!$usuario) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Usuário não encontrado.'
+                    'message' => 'Usu?rio n?o encontrado.'
                 ], 404);
             }
 
-            if (!Hash::check($senhaAtual, (string) ($usuario->password ?? ''))) {
+            $requester = null;
+            if ($requesterId !== null && $requesterId !== '') {
+                $requester = DB::connection('sqlsrv')
+                    ->table('users45 as u')
+                    ->leftJoin('roles45 as r', 'r.id', '=', 'u.role_id')
+                    ->select('u.id', 'u.equipe_id', 'r.nome as role_nome', 'r.slug as role_slug')
+                    ->where('u.id', (int) $requesterId)
+                    ->first();
+            }
+
+            $targetId = (int) $userId;
+            $actorId = ($requesterId === null || $requesterId === '') ? null : (int) $requesterId;
+            $targetEquipeId = $usuario->equipe_id ?? null;
+            $actorEquipeId = $requester?->equipe_id ?? $requesterEquipeId;
+            $actorRole = $requesterRole !== ''
+                ? $requesterRole
+                : Str::lower(trim((string) ($requester?->role_slug ?? $requester?->role_nome ?? '')));
+
+            $isSelfChange = $actorId === null || $actorId === $targetId;
+            $sameTeam = $actorEquipeId !== null
+                && $targetEquipeId !== null
+                && (int) $actorEquipeId === (int) $targetEquipeId;
+            $canBypassCurrentPassword = !$isSelfChange && (
+                $actorRole === 'master'
+                || ($actorRole === 'administrador' && $sameTeam)
+                || ($actorRole === 'supervisor' && $sameTeam)
+            );
+
+            if (!$canBypassCurrentPassword && $senhaAtual === '') {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Senha atual inválida.'
+                    'message' => 'Campo senha_atual ? obrigat?rio.'
+                ], 422);
+            }
+
+            $passwordHash = (string) ($usuario->password ?? '');
+            $senhaAtualValida = $senhaAtual !== '' && (
+                Hash::check($senhaAtual, $passwordHash)
+                || hash_equals($passwordHash, $senhaAtual)
+            );
+
+            if (!$canBypassCurrentPassword && !$senhaAtualValida) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Senha atual inv?lida.'
                 ], 422);
             }
 

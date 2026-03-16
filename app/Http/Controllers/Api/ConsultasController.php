@@ -608,6 +608,85 @@ class ConsultasController extends Controller
         }
     }
 
+    public function consulta_online_fila(Request $request)
+    {
+        try {
+            $equipeId = trim((string) $request->query('equipe_id', ''));
+            $idUser = (int) $request->query('id_user', 0);
+            $hierarquia = strtolower(trim((string) $request->query('hierarquia', $request->query('role', ''))));
+
+            $isMaster = $hierarquia === 'master';
+            $isAdmOuSuper = in_array($hierarquia, ['adm', 'super', 'administrador', 'supervisor'], true);
+            $isOperador = in_array($hierarquia, ['oper', 'operador'], true);
+
+            if ($isOperador && $idUser <= 0) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Parametro obrigatorio para Operador: id_user (query string).',
+                    'exemplo' => '/api/consultaonline/fila?id_user=123&hierarquia=oper',
+                ], 400);
+            }
+
+            if (! $isMaster && ! $isOperador && $equipeId === '') {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Parametro obrigatorio: equipe_id (query string).',
+                    'exemplo' => '/api/consultaonline/fila?equipe_id=1&hierarquia=adm',
+                ], 400);
+            }
+
+            $sql = "
+                SELECT TOP (1000)
+                    [id],
+                    [cpf],
+                    [nb],
+                    [nome],
+                    [telefone],
+                    [dt_nascimento],
+                    [consultas_ativas],
+                    [status],
+                    [id_consulta],
+                    [id_user],
+                    [equipe_id],
+                    [created_at],
+                    [updated_at]
+                FROM [consultas_api].[dbo].[filaconsultas]
+            ";
+
+            $params = [];
+
+            if (! $isMaster) {
+                if ($isOperador) {
+                    $sql .= " WHERE [id_user] = ?";
+                    $params[] = $idUser;
+                } elseif ($isAdmOuSuper) {
+                    $sql .= " WHERE [equipe_id] = ?";
+                    $params[] = (int) $equipeId;
+                } else {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Hierarquia invalida. Use master, adm, super ou oper.',
+                    ], 400);
+                }
+            }
+
+            $sql .= " ORDER BY [id] DESC";
+            $fila = DB::connection('sqlsrv')->select($sql, $params);
+
+            return response()->json([
+                'success' => true,
+                'total' => count($fila),
+                'data' => $fila,
+            ]);
+        } catch (Throwable $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Erro ao buscar fila da consulta online',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
     public function dashboard_saldos_prata(Request $request)
     {
         try {

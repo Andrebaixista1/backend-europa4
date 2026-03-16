@@ -70,6 +70,7 @@ Route::get('/dashboard/consultas/presenca', [ConsultasController::class, 'dashbo
 Route::get('/dashboard/consultas/in100', [ConsultasController::class, 'dashboard_consultas_in100']);
 Route::get('/dashboard/consultas/prata', [ConsultasController::class, 'dashboard_consultas_prata']);
 Route::get('/dashboard/fila/in100', [ConsultasController::class, 'dashboard_fila_in100']);
+Route::get('/consultaonline/fila', [ConsultasController::class, 'consulta_online_fila']);
 Route::post('/recargas/in100', [ConsultasController::class, 'recarga_in100']);
 
 // Hand +
