@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 use Throwable;
@@ -1133,9 +1134,6 @@ class CriacaoController extends Controller
         try {
             $login     = trim((string) $request->input('login', ''));
             $senha     = (string) $request->input('senha');
-            $token     = trim((string) $request->input('token', ''));
-            $accountId = trim((string) $request->input('account_id', ''));
-            $accountToken = trim((string) $request->input('account_token', ''));
             $equipeIds = $this->normalizeApiEquipeIds($request->input('equipe_id', [1]));
 
             if ($login === '') {
@@ -1152,6 +1150,53 @@ class CriacaoController extends Controller
                 ], 422);
             }
 
+            $prataClient = trim((string) env('PRATA_CLIENT_TOKEN', 'giQ2KhtcAmrpogbI7GJNz3beMvV1H96C'));
+            $prataLoginUrl = trim((string) env('PRATA_LOGIN_URL', 'https://api.bancoprata.com.br/v1/users/login'));
+
+            if ($prataClient === '') {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'PRATA_CLIENT_TOKEN nao configurado no servidor.',
+                ], 500);
+            }
+
+            $authResponse = Http::timeout(30)
+                ->acceptJson()
+                ->withHeaders([
+                    'x-prata-client' => $prataClient,
+                    'Content-Type' => 'application/json',
+                ])
+                ->post($prataLoginUrl, [
+                    'email' => $login,
+                    'password' => $senha,
+                ]);
+
+            $authPayload = $authResponse->json();
+            if (!is_array($authPayload)) {
+                $authPayload = [];
+            }
+
+            if (!$authResponse->successful()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Falha ao autenticar no Banco Prata.',
+                    'http_status' => $authResponse->status(),
+                    'error' => $authPayload,
+                ], 422);
+            }
+
+            $token = trim((string) data_get($authPayload, 'data.token', ''));
+            $accountId = data_get($authPayload, 'data.account.id');
+            $accountToken = trim((string) data_get($authPayload, 'data.account.token', ''));
+
+            if ($token === '' || $accountId === null || $accountToken === '') {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Resposta de login do Banco Prata sem token/account.',
+                    'error' => $authPayload,
+                ], 422);
+            }
+
             $id = DB::connection('sqlsrv')
                 ->table('consultas_api.dbo.saldo_prata')
                 ->insertGetId([
@@ -1161,9 +1206,9 @@ class CriacaoController extends Controller
                     'consultados' => 0,
                     'limite'      => 1000,
                     'equipe_id'   => $this->serializeApiEquipeIds($equipeIds),
-                    'token'       => $token !== '' ? $token : null,
-                    'account_id'  => $accountId !== '' ? $accountId : null,
-                    'account_token' => $accountToken !== '' ? $accountToken : null,
+                    'token'       => $token,
+                    'account_id'  => (string) $accountId,
+                    'account_token' => $accountToken,
                     'created_at'  => now(),
                     'updated_at'  => now(),
                 ]);
