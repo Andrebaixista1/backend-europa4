@@ -407,12 +407,25 @@ class ConsultasController extends Controller
             $equipeId = trim((string) $request->query('equipe_id', ''));
             $idUser = (int) $request->query('id_user', 0);
             $role = strtolower(trim((string) $request->query('role', $request->query('hierarquia', ''))));
-            $loadAll = filter_var($request->query('all', false), FILTER_VALIDATE_BOOL) || $role === 'master';
+            $roleId = (int) $request->query('role_id', $request->query('id_role', 0));
+            $nivelHierarquia = (int) $request->query('nivel_hierarquia', 0);
 
-            if (! $loadAll && $equipeId === '' && $idUser <= 0) {
+            $isMaster = $role === 'master' || $roleId === 1 || $nivelHierarquia >= 100;
+            $isOperador = $role === 'operador' || $nivelHierarquia === 10;
+            $loadAll = $isMaster;
+
+            if ($isOperador && $idUser <= 0) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Parametro obrigatorio: equipe_id ou id_user (query string).',
+                    'message' => 'Parametro obrigatorio para Operador: id_user (query string).',
+                    'exemplo' => '/api/dashboard/consultas/in100?id_user=123',
+                ], 400);
+            }
+
+            if (! $loadAll && ! $isOperador && $equipeId === '') {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Parametro obrigatorio: equipe_id (query string).',
                     'exemplo' => '/api/dashboard/consultas/in100?equipe_id=1',
                 ], 400);
             }
@@ -459,15 +472,13 @@ class ConsultasController extends Controller
 
             $params = [];
             if (! $loadAll) {
-                if ($role === 'operador' && $idUser > 0) {
+                if ($isOperador) {
                     $sql .= " WHERE [id_usuario] = ?";
                     $params[] = $idUser;
                 } else {
                     $sql .= " WHERE " . $this->equipeFilterSql('equipe_id');
                     $params[] = "%," . $equipeId . ",%";
                 }
-            } else {
-                $sql .= " WHERE [data_hora_registro] >= DATEADD(DAY, -30, GETDATE())";
             }
 
             $sql .= " ORDER BY [id] DESC";
