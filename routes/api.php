@@ -51,10 +51,18 @@ Route::post('/health-consult/force-backup', [BackupHealthController::class, 'for
 // Logins
 Route::get('/logins/consultashandmais', [ConsultasController::class, 'handmais_login']);
 Route::get('/logins/consultasv8', [ConsultasController::class, 'v8_login']);
+Route::get('/logins/consultaspresenca', [ConsultasController::class, 'presenca_login']);
+Route::get('/logins/consultasprata', [ConsultasController::class, 'prata_login']);
 Route::get('/dashboard/saldos/handmais', [ConsultasController::class, 'dashboard_saldos_handmais']);
 Route::get('/dashboard/saldos/v8', [ConsultasController::class, 'dashboard_saldos_v8']);
+Route::get('/dashboard/saldos/presenca', [ConsultasController::class, 'dashboard_saldos_presenca']);
+Route::get('/dashboard/saldos/in100', [ConsultasController::class, 'dashboard_saldos_in100']);
+Route::get('/dashboard/saldos/prata', [ConsultasController::class, 'dashboard_saldos_prata']);
 Route::get('/dashboard/consultas/handmais', [ConsultasController::class, 'dashboard_consultas_handmais']);
 Route::get('/dashboard/consultas/v8', [ConsultasController::class, 'dashboard_consultas_v8']);
+Route::get('/dashboard/consultas/presenca', [ConsultasController::class, 'dashboard_consultas_presenca']);
+Route::get('/dashboard/consultas/in100', [ConsultasController::class, 'dashboard_consultas_in100']);
+Route::get('/dashboard/consultas/prata', [ConsultasController::class, 'dashboard_consultas_prata']);
 
 // Hand +
 Route::post('/online/consultashandmais', [HandMaisController::class, 'handmais_online']);
@@ -69,5 +77,13 @@ Route::post('/register/consultasv8', [CriacaoController::class, 'v8_cadastro']);
 Route::patch('/alter/consultasv8/equipes', [CriacaoController::class, 'alterar_equipes_v8']);
 Route::patch('/delete/consultasv8', [CriacaoController::class, 'excluir_v8_cadastro']);
 Route::delete('/delete/consultasv8', [CriacaoController::class, 'excluir_v8_cadastro']);
+Route::post('/register/consultaspresenca', [CriacaoController::class, 'presenca_cadastro']);
+Route::patch('/alter/consultaspresenca/equipes', [CriacaoController::class, 'alterar_equipes_presenca']);
+Route::patch('/delete/consultaspresenca', [CriacaoController::class, 'excluir_presenca_cadastro']);
+Route::delete('/delete/consultaspresenca', [CriacaoController::class, 'excluir_presenca_cadastro']);
+Route::post('/register/consultasprata', [CriacaoController::class, 'prata_cadastro']);
+Route::patch('/alter/consultasprata/equipes', [CriacaoController::class, 'alterar_equipes_prata']);
+Route::patch('/delete/consultasprata', [CriacaoController::class, 'excluir_prata_cadastro']);
+Route::delete('/delete/consultasprata', [CriacaoController::class, 'excluir_prata_cadastro']);
 Route::post('/online/consultasv8', [v8Controller::class, 'V8_online']);
 Route::get('/start/consultasv8', [v8Controller::class, 'processar_fila']);

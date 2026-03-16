@@ -1079,6 +1079,110 @@ class CriacaoController extends Controller
         }
     }
 
+    public function presenca_cadastro(Request $request)
+    {
+        try {
+            $login     = trim((string) $request->input('login', ''));
+            $senha     = (string) $request->input('senha');
+            $equipeIds = $this->normalizeApiEquipeIds($request->input('equipe_id', [1]));
+
+            if ($login === '') {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Campo login e obrigatorio.'
+                ], 422);
+            }
+
+            if (!$senha) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Campo senha e obrigatorio.'
+                ], 422);
+            }
+
+            $id = DB::connection('sqlsrv')
+                ->table('consultas_api.dbo.saldo_presenca')
+                ->insertGetId([
+                    'login'       => $login,
+                    'senha'       => $senha,
+                    'total'       => 1000,
+                    'consultados' => 0,
+                    'limite'      => 1000,
+                    'equipe_id'   => $this->serializeApiEquipeIds($equipeIds),
+                    'created_at'  => now(),
+                    'updated_at'  => now(),
+                ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Cadastro Presenca realizado com sucesso.',
+                'id' => $id,
+                'equipe_ids' => $equipeIds
+            ], 201);
+        } catch (\Throwable $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Erro ao cadastrar Presenca.',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    public function prata_cadastro(Request $request)
+    {
+        try {
+            $login     = trim((string) $request->input('login', ''));
+            $senha     = (string) $request->input('senha');
+            $token     = trim((string) $request->input('token', ''));
+            $accountId = trim((string) $request->input('account_id', ''));
+            $accountToken = trim((string) $request->input('account_token', ''));
+            $equipeIds = $this->normalizeApiEquipeIds($request->input('equipe_id', [1]));
+
+            if ($login === '') {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Campo login e obrigatorio.'
+                ], 422);
+            }
+
+            if (!$senha) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Campo senha e obrigatorio.'
+                ], 422);
+            }
+
+            $id = DB::connection('sqlsrv')
+                ->table('consultas_api.dbo.saldo_prata')
+                ->insertGetId([
+                    'login'       => $login,
+                    'senha'       => $senha,
+                    'total'       => 1000,
+                    'consultados' => 0,
+                    'limite'      => 1000,
+                    'equipe_id'   => $this->serializeApiEquipeIds($equipeIds),
+                    'token'       => $token !== '' ? $token : null,
+                    'account_id'  => $accountId !== '' ? $accountId : null,
+                    'account_token' => $accountToken !== '' ? $accountToken : null,
+                    'created_at'  => now(),
+                    'updated_at'  => now(),
+                ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Cadastro Prata realizado com sucesso.',
+                'id' => $id,
+                'equipe_ids' => $equipeIds
+            ], 201);
+        } catch (\Throwable $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Erro ao cadastrar Prata.',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
     public function alterar_equipes_handmais(Request $request)
     {
         return $this->alterarEquipesApiCadastro(
@@ -1097,6 +1201,24 @@ class CriacaoController extends Controller
         );
     }
 
+    public function alterar_equipes_presenca(Request $request)
+    {
+        return $this->alterarEquipesApiCadastro(
+            $request,
+            'consultas_api.dbo.saldo_presenca',
+            'Login Presenca atualizado com sucesso.'
+        );
+    }
+
+    public function alterar_equipes_prata(Request $request)
+    {
+        return $this->alterarEquipesApiCadastro(
+            $request,
+            'consultas_api.dbo.saldo_prata',
+            'Login Prata atualizado com sucesso.'
+        );
+    }
+
     public function excluir_handmais_cadastro(Request $request)
     {
         return $this->excluirApiCadastro(
@@ -1112,6 +1234,24 @@ class CriacaoController extends Controller
             $request,
             'consultas_api.dbo.saldo_v8',
             'Login V8 excluido com sucesso.'
+        );
+    }
+
+    public function excluir_presenca_cadastro(Request $request)
+    {
+        return $this->excluirApiCadastro(
+            $request,
+            'consultas_api.dbo.saldo_presenca',
+            'Login Presenca excluido com sucesso.'
+        );
+    }
+
+    public function excluir_prata_cadastro(Request $request)
+    {
+        return $this->excluirApiCadastro(
+            $request,
+            'consultas_api.dbo.saldo_prata',
+            'Login Prata excluido com sucesso.'
         );
     }
 

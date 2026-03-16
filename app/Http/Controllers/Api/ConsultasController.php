@@ -241,6 +241,401 @@ class ConsultasController extends Controller
         }
     }
 
+    public function dashboard_saldos_presenca(Request $request)
+    {
+        try {
+            $equipeId = trim((string) $request->query('equipe_id', ''));
+            $loadAll = filter_var($request->query('all', false), FILTER_VALIDATE_BOOL);
+
+            $sql = "
+                SELECT TOP (1000) [id]
+                    ,[login]
+                    ,[senha]
+                    ,[total]
+                    ,[consultados]
+                    ,[limite]
+                    ,[equipe_id]
+                    ,[created_at]
+                    ,[updated_at]
+                FROM [consultas_api].[dbo].[saldo_presenca]
+            ";
+
+            $params = [];
+
+            if (!$loadAll && $equipeId !== '' && preg_match('/^\d+$/', $equipeId)) {
+                $sql .= " WHERE " . $this->equipeFilterSql('equipe_id');
+                $params[] = "%," . $equipeId . ",%";
+            }
+
+            $sql .= " ORDER BY [id] DESC";
+            $saldos = DB::connection('sqlsrv')->select($sql, $params);
+
+            return response()->json([
+                'success' => true,
+                'total' => count($saldos),
+                'data' => $saldos,
+            ]);
+        } catch (Throwable $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Erro ao buscar saldos Presenca',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    public function dashboard_consultas_presenca(Request $request)
+    {
+        try {
+            $validacao = $this->validarEquipeId($request, '/api/dashboard/consultas/presenca?equipe_id=1');
+            if ($validacao instanceof \Illuminate\Http\JsonResponse) {
+                return $validacao;
+            }
+
+            [$equipeId, $loadAll] = $validacao;
+
+            $sql = "
+                SELECT TOP (1000) [id]
+                    ,[cpf]
+                    ,[nome]
+                    ,[telefone]
+                    ,[matricula]
+                    ,[numeroInscricaoEmpregador]
+                    ,[elegivel]
+                    ,[valorMargemDisponivel]
+                    ,[valorMargemBase]
+                    ,[valorTotalDevido]
+                    ,[dataAdmissao]
+                    ,[dataNascimento]
+                    ,[nomeMae]
+                    ,[sexo]
+                    ,[nomeTipo]
+                    ,[prazo]
+                    ,[taxaJuros]
+                    ,[valorLiberado]
+                    ,[valorParcela]
+                    ,[taxaSeguro]
+                    ,[valorSeguro]
+                    ,[tipoConsulta]
+                    ,[status]
+                    ,[mensagem]
+                    ,[id_user]
+                    ,[equipe_id]
+                    ,[id_consulta_presenca]
+                    ,[created_at]
+                    ,[updated_at]
+                FROM [consultas_api].[dbo].[consulta_presenca]
+            ";
+
+            $params = [];
+
+            if (! $loadAll) {
+                $sql .= " WHERE [equipe_id] = ?";
+                $params[] = (int) $equipeId;
+            }
+
+            $sql .= " ORDER BY [created_at] DESC, [id] DESC";
+            $consultas = DB::connection('sqlsrv')->select($sql, $params);
+
+            return response()->json([
+                'success' => true,
+                'total' => count($consultas),
+                'data' => $consultas,
+            ]);
+        } catch (Throwable $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Erro ao buscar consultas Presenca',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    public function dashboard_saldos_in100(Request $request)
+    {
+        try {
+            $validacao = $this->validarEquipeId($request, '/api/dashboard/saldos/in100?equipe_id=1');
+            if ($validacao instanceof \Illuminate\Http\JsonResponse) {
+                return $validacao;
+            }
+
+            [$equipeId, $loadAll] = $validacao;
+
+            $sql = "
+                SELECT TOP (1000)
+                    s.[id] AS [saldo_id],
+                    s.[total_carregado],
+                    s.[limite_disponivel],
+                    s.[consultas_realizada],
+                    s.[data_saldo_carregado],
+                    s.[equipe_id],
+                    ISNULL(e.[nome], N'Equipe Excluida') AS [equipe_nome]
+                FROM [europa4].[dbo].[saldoin100] s
+                LEFT JOIN [europa4].[dbo].[equipes45] e
+                    ON e.[id] = s.[equipe_id]
+            ";
+
+            $params = [];
+            if (! $loadAll) {
+                $sql .= " WHERE s.[equipe_id] = ?";
+                $params[] = (int) $equipeId;
+            }
+
+            $sql .= " ORDER BY s.[data_saldo_carregado] DESC, s.[id] DESC";
+            $saldos = DB::connection('sqlsrv')->select($sql, $params);
+
+            return response()->json([
+                'success' => true,
+                'total' => count($saldos),
+                'data' => $saldos,
+            ]);
+        } catch (Throwable $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Erro ao buscar saldos IN100',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    public function dashboard_consultas_in100(Request $request)
+    {
+        try {
+            $equipeId = trim((string) $request->query('equipe_id', ''));
+            $idUser = (int) $request->query('id_user', 0);
+            $role = strtolower(trim((string) $request->query('role', $request->query('hierarquia', ''))));
+            $loadAll = filter_var($request->query('all', false), FILTER_VALIDATE_BOOL) || $role === 'master';
+
+            if (! $loadAll && $equipeId === '' && $idUser <= 0) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Parametro obrigatorio: equipe_id ou id_user (query string).',
+                    'exemplo' => '/api/dashboard/consultas/in100?equipe_id=1',
+                ], 400);
+            }
+
+            $sql = "
+                SELECT TOP (10000)
+                    ca.*,
+                    u.[login],
+                    u.[nome] AS [user_name],
+                    u.[equipe_id]
+                FROM [Inbis].[dbo].[consultas_api] ca
+                LEFT JOIN [europa4].[dbo].[users45] u
+                    ON ca.[id_usuario] = u.[id]
+            ";
+
+            $params = [];
+            if (! $loadAll) {
+                if ($role === 'operador' && $idUser > 0) {
+                    $sql .= " WHERE ca.[id_usuario] = ?";
+                    $params[] = $idUser;
+                } else {
+                    $sql .= " WHERE u.[equipe_id] = ?";
+                    $params[] = (int) $equipeId;
+                }
+            } else {
+                $sql .= " WHERE ca.[data_hora_registro] >= DATEADD(DAY, -30, GETDATE())";
+            }
+
+            $sql .= " ORDER BY ca.[id] DESC";
+            $consultas = DB::connection('sqlsrv')->select($sql, $params);
+
+            return response()->json([
+                'success' => true,
+                'total' => count($consultas),
+                'data' => $consultas,
+            ]);
+        } catch (Throwable $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Erro ao buscar consultas IN100',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    public function dashboard_saldos_prata(Request $request)
+    {
+        try {
+            $validacao = $this->validarEquipeId($request, '/api/dashboard/saldos/prata?equipe_id=1');
+            if ($validacao instanceof \Illuminate\Http\JsonResponse) {
+                return $validacao;
+            }
+
+            [$equipeId, $loadAll] = $validacao;
+
+            $sql = "
+                SELECT TOP (1000)
+                    [id],
+                    [login],
+                    [senha],
+                    [total],
+                    [consultados],
+                    [limite],
+                    [equipe_id],
+                    [token],
+                    [account_id],
+                    [account_token],
+                    [created_at],
+                    [updated_at]
+                FROM [consultas_api].[dbo].[saldo_prata]
+            ";
+
+            $params = [];
+            if (! $loadAll) {
+                $sql .= " WHERE " . $this->equipeFilterSql('equipe_id');
+                $params[] = "%," . $equipeId . ",%";
+            }
+
+            $sql .= " ORDER BY [consultados] DESC, [id] DESC";
+            $saldos = DB::connection('sqlsrv')->select($sql, $params);
+
+            return response()->json([
+                'success' => true,
+                'total' => count($saldos),
+                'data' => $saldos,
+            ]);
+        } catch (Throwable $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Erro ao buscar saldos Prata',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    public function dashboard_consultas_prata(Request $request)
+    {
+        try {
+            $validacao = $this->validarEquipeId($request, '/api/dashboard/consultas/prata?equipe_id=1');
+            if ($validacao instanceof \Illuminate\Http\JsonResponse) {
+                return $validacao;
+            }
+
+            [$equipeId, $loadAll] = $validacao;
+
+            $sql = "
+                SELECT TOP (1000)
+                    [id],
+                    [cpf],
+                    [nome],
+                    [telefone],
+                    [status],
+                    [sexo],
+                    [elegivel],
+                    [dt_nascimento],
+                    [tipo_bloqueio],
+                    [blocked_at],
+                    [nome_mae],
+                    [expira_consulta],
+                    [margem_base],
+                    [motivo_inelegibilidade],
+                    [qtd_contratos_suspensos],
+                    [margem_disponivel],
+                    [status_consulta],
+                    [fornecedor_id],
+                    [margem_total_disponivel],
+                    [saldo_total_disp_6_parcelas],
+                    [valor_emissao_6_parcelas],
+                    [saldo_total_disp_12_parcelas],
+                    [valor_emissao_12_parcelas],
+                    [saldo_total_disp_24_parcelas],
+                    [valor_emissao_24_parcelas],
+                    [status_consulta] AS [status_consulta_prata],
+                    [created_at],
+                    [updated_at],
+                    [id_user],
+                    [equipe_id],
+                    [id_consulta_prata]
+                FROM [consultas_api].[dbo].[consulta_prata]
+            ";
+
+            $params = [];
+            if (! $loadAll) {
+                $sql .= " WHERE [equipe_id] = ?";
+                $params[] = (int) $equipeId;
+            }
+
+            $sql .= " ORDER BY [created_at] DESC, [id] DESC";
+            $consultas = DB::connection('sqlsrv')->select($sql, $params);
+
+            return response()->json([
+                'success' => true,
+                'total' => count($consultas),
+                'data' => $consultas,
+            ]);
+        } catch (Throwable $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Erro ao buscar consultas Prata',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    public function prata_login(Request $request)
+    {
+        try {
+            $equipeId = trim((string) $request->query('equipe_id', ''));
+            $loadAll = filter_var($request->query('all', false), FILTER_VALIDATE_BOOL);
+
+            if (!$loadAll && $equipeId === '') {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Parametro obrigatorio: equipe_id (query string).',
+                    'exemplo' => '/api/logins/consultasprata?equipe_id=1',
+                ], 400);
+            }
+
+            if (!$loadAll && !preg_match('/^\d+$/', $equipeId)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'equipe_id deve ser numerico.',
+                ], 400);
+            }
+
+            $sql = "
+            SELECT TOP (1000) [id]
+                ,[login]
+                ,[senha]
+                ,[total]
+                ,[consultados]
+                ,[limite]
+                ,[equipe_id]
+                ,[token]
+                ,[account_id]
+                ,[account_token]
+                ,[created_at]
+                ,[updated_at]
+            FROM [consultas_api].[dbo].[saldo_prata]
+        ";
+
+            $params = [];
+
+            if (!$loadAll) {
+                $sql .= " WHERE " . $this->equipeFilterSql('equipe_id');
+                $params[] = "%," . $equipeId . ",%";
+            }
+
+            $sql .= " ORDER BY [id] DESC";
+
+            $usuarios = DB::connection('sqlsrv')->select($sql, $params);
+
+            return response()->json([
+                'success' => true,
+                'total'   => count($usuarios),
+                'data'    => $usuarios,
+            ]);
+        } catch (Throwable $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Erro ao buscar logins',
+                'error'   => $e->getMessage(),
+            ], 500);
+        }
+    }
+
     public function usuarios()
     {
         try {
@@ -799,6 +1194,65 @@ class ConsultasController extends Controller
                 ,[created_at]
                 ,[updated_at]
             FROM [consultas_api].[dbo].[saldo_v8]
+        ";
+
+            $params = [];
+
+            if (!$loadAll) {
+                $sql .= " WHERE ',' + REPLACE(REPLACE(REPLACE(REPLACE([equipe_id], '{',''),'}',''),'[',''),']','') + ',' LIKE ?";
+                $params[] = "%," . $equipeId . ",%";
+            }
+
+            $sql .= " ORDER BY [id] DESC";
+
+            $usuarios = DB::connection('sqlsrv')->select($sql, $params);
+
+            return response()->json([
+                'success' => true,
+                'total'   => count($usuarios),
+                'data'    => $usuarios,
+            ]);
+        } catch (Throwable $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Erro ao buscar logins',
+                'error'   => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    public function presenca_login(Request $request)
+    {
+        try {
+            $equipeId = trim((string) $request->query('equipe_id', ''));
+            $loadAll = filter_var($request->query('all', false), FILTER_VALIDATE_BOOL);
+
+            if (!$loadAll && $equipeId === '') {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Parametro obrigatorio: equipe_id (query string).',
+                    'exemplo' => '/api/logins/consultaspresenca?equipe_id=1',
+                ], 400);
+            }
+
+            if (!$loadAll && !preg_match('/^\d+$/', $equipeId)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'equipe_id deve ser numerico.',
+                ], 400);
+            }
+
+            $sql = "
+            SELECT TOP (1000) [id]
+                ,[login]
+                ,[senha]
+                ,[total]
+                ,[consultados]
+                ,[limite]
+                ,[equipe_id]
+                ,[created_at]
+                ,[updated_at]
+            FROM [consultas_api].[dbo].[saldo_presenca]
         ";
 
             $params = [];
