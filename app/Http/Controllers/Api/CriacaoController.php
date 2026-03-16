@@ -1083,14 +1083,13 @@ class CriacaoController extends Controller
     public function in100_cadastro(Request $request)
     {
         try {
-            $equipeNome = trim((string) $request->input('equipe_nome', ''));
-            $total = (int) $request->input('total', 1000);
+            $total = (int) $request->input('total', $request->input('quantidade', 200));
             $equipeIds = $this->normalizeApiEquipeIds($request->input('equipe_id', [1]));
 
-            if ($equipeNome === '') {
+            if (empty($equipeIds)) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Campo equipe_nome e obrigatorio.'
+                    'message' => 'Selecione ao menos uma equipe.'
                 ], 422);
             }
 
@@ -1101,22 +1100,38 @@ class CriacaoController extends Controller
                 ], 422);
             }
 
-            $id = DB::connection('sqlsrv')
-                ->table('consultas_api.dbo.saldo_in100')
-                ->insertGetId([
-                    'equipe_nome' => $equipeNome,
+            $equipesById = DB::connection()
+                ->table('equipes45')
+                ->whereIn('id', $equipeIds)
+                ->pluck('nome', 'id');
+
+            $now = now();
+            $rows = [];
+            foreach ($equipeIds as $idEquipe) {
+                $nomeEquipe = trim((string) ($equipesById[$idEquipe] ?? ''));
+                if ($nomeEquipe === '') {
+                    $nomeEquipe = 'Equipe ' . $idEquipe;
+                }
+
+                $rows[] = [
+                    'equipe_nome' => $nomeEquipe,
                     'total'       => $total,
                     'consultados' => 0,
                     'limite'      => $total,
-                    'equipe_id'   => $this->serializeApiEquipeIds($equipeIds),
-                    'created_at'  => now(),
-                    'updated_at'  => now(),
-                ]);
+                    'equipe_id'   => (string) $idEquipe,
+                    'created_at'  => $now,
+                    'updated_at'  => $now,
+                ];
+            }
+
+            DB::connection('sqlsrv')
+                ->table('consultas_api.dbo.saldo_in100')
+                ->insert($rows);
 
             return response()->json([
                 'success' => true,
                 'message' => 'Cadastro IN100 realizado com sucesso.',
-                'id' => $id,
+                'created' => count($rows),
                 'equipe_ids' => $equipeIds
             ], 201);
         } catch (\Throwable $e) {
