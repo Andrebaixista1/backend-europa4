@@ -1133,7 +1133,8 @@ class CriacaoController extends Controller
     public function prata_cadastro(Request $request)
     {
         try {
-            $login     = trim((string) $request->input('login', ''));
+            $loginInput = $request->input('login', $request->input('email', ''));
+            $login     = trim((string) $loginInput);
             $senha     = (string) $request->input('senha');
             $equipeIds = $this->normalizeApiEquipeIds($request->input('equipe_id', [1]));
 
