@@ -1215,7 +1215,7 @@ class CriacaoController extends Controller
                     'total'       => 1000,
                     'consultados' => 0,
                     'limite'      => 1000,
-                    'equipe_id'   => $this->serializeApiEquipeIds($equipeIds),
+                    'equipe_id'   => $equipeIds[0] ?? 1,
                     'token'       => $token,
                     'account_id'  => (int) $accountId,
                     'account_token' => $accountToken,
@@ -1327,7 +1327,9 @@ class CriacaoController extends Controller
                 ->table($table)
                 ->where('id', $id)
                 ->update([
-                    'equipe_id' => $this->serializeApiEquipeIds($equipeIds),
+                    'equipe_id' => $table === 'consultas_api.dbo.saldo_prata'
+                        ? ($equipeIds[0] ?? 1)
+                        : $this->serializeApiEquipeIds($equipeIds),
                     'updated_at' => now(),
                 ]);
 
