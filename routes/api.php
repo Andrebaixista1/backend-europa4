@@ -48,6 +48,7 @@ Route::get('/health-consult', [BackupHealthController::class, 'health']);
 Route::post('/health-consult/force-backup', [BackupHealthController::class, 'forceBackup']);
 Route::get('/getall-vanguard', [ConsultasController::class, 'vanguard_list']);
 Route::post('/add-vanguard', [ConsultasController::class, 'vanguard_add']);
+Route::post('/edit-vanguard', [ConsultasController::class, 'vanguard_edit']);
 Route::post('/up-vanguard', [ConsultasController::class, 'vanguard_renew']);
 Route::post('/del-vanguard', [ConsultasController::class, 'vanguard_inactivate']);
 

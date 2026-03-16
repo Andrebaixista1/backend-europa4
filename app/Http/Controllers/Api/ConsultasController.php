@@ -1570,6 +1570,77 @@ class ConsultasController extends Controller
         }
     }
 
+    public function vanguard_edit(Request $request)
+    {
+        try {
+            $payload = $request->all();
+            $id = (int) ($payload['id'] ?? 0);
+            $codigo = trim((string) ($payload['codigo'] ?? ''));
+            $empresa = trim((string) ($payload['empresa'] ?? ''));
+            $login = trim((string) ($payload['login'] ?? ''));
+            $nome = trim((string) ($payload['nome'] ?? ''));
+            $cargo = trim((string) ($payload['cargo'] ?? ''));
+            $dataCadastro = trim((string) ($payload['data_cadastro'] ?? ''));
+            $renovacao = trim((string) ($payload['renovacao'] ?? ''));
+            $status = trim((string) ($payload['status'] ?? ''));
+            $vencimento = trim((string) ($payload['vencimento'] ?? ''));
+            $grupo = trim((string) ($payload['grupo'] ?? ''));
+
+            if ($id <= 0) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Campo obrigatorio: id.',
+                ], 400);
+            }
+
+            if ($codigo === '' || $empresa === '' || $login === '' || $cargo === '' || $dataCadastro === '' || $grupo === '') {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Campos obrigatorios: codigo, empresa, login, cargo, data_cadastro, grupo.',
+                ], 400);
+            }
+
+            DB::connection('sqlsrv')->update("
+                UPDATE [Inbis].[dbo].[usuarios_vanguard]
+                SET
+                    [codigo] = ?,
+                    [empresa] = ?,
+                    [login] = ?,
+                    [nome] = ?,
+                    [cargo] = ?,
+                    [data_cadastro] = ?,
+                    [renovacao] = ?,
+                    [status] = ?,
+                    [vencimento] = ?,
+                    [grupo] = ?
+                WHERE [id] = ?
+            ", [
+                $codigo,
+                $empresa,
+                $login,
+                $nome,
+                $cargo,
+                $dataCadastro,
+                $renovacao !== '' ? $renovacao : null,
+                $status !== '' ? $status : null,
+                $vencimento !== '' ? $vencimento : null,
+                $grupo,
+                $id,
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Usuario Vanguard atualizado.',
+            ]);
+        } catch (Throwable $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Erro ao editar Vanguard',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
     public function vanguard_renew(Request $request)
     {
         try {
